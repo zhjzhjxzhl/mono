@@ -77,7 +77,7 @@ mono_unity_class_is_interface (MonoClass* klass)
 MONO_API gboolean
 mono_unity_class_is_abstract (MonoClass* klass)
 {
-	return (klass->flags & TYPE_ATTRIBUTE_ABSTRACT);
+	return mono_class_is_abstract(klass);
 }
 
 void
@@ -145,14 +145,14 @@ MONO_API gboolean
 mono_class_is_generic (MonoClass *klass)
 {
 	g_assert(klass);
-	return (klass->is_generic);
+	return mono_class_is_gtd(klass);
 }
 
 MONO_API gboolean
 mono_class_is_inflated (MonoClass *klass)
 {
 	g_assert(klass);
-	return (klass->is_inflated);
+	return mono_class_is_ginst(klass);
 }
 
 MONO_API void
