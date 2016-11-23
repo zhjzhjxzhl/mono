@@ -349,7 +349,8 @@ typedef enum {
 struct _MonoInternalThread {
 	MonoObject  obj;
 	volatile int lock_thread_id; /* to be used as the pre-shifted thread id in thin locks. Used for appdomain_ref push/pop */
-	HANDLE	    handle;
+	MonoThreadHandle *handle;
+	HANDLE native_handle;
 	MonoArray  *cached_culture_info;
 	gunichar2  *name;
 	guint32	    name_len;
@@ -382,6 +383,8 @@ struct _MonoInternalThread {
 	gsize abort_protected_block_count;
 	gint32 priority;
 	GPtrArray *owned_mutexes;
+	MonoOSEvent *suspended;
+	gint32 self_suspended; // TRUE | FALSE
 	/* 
 	 * These fields are used to avoid having to increment corlib versions
 	 * when a new field is added to this structure.
@@ -1624,10 +1627,10 @@ MonoString*
 mono_string_intern_checked (MonoString *str, MonoError *error);
 
 char *
-mono_exception_get_native_backtrace (MonoException *exc);
+mono_exception_handle_get_native_backtrace (MonoExceptionHandle exc);
 
-MonoString *
-ves_icall_Mono_Runtime_GetNativeStackTrace (MonoException *exc);
+MonoStringHandle
+ves_icall_Mono_Runtime_GetNativeStackTrace (MonoExceptionHandle exc, MonoError *erro);
 
 char *
 mono_exception_get_managed_backtrace (MonoException *exc);

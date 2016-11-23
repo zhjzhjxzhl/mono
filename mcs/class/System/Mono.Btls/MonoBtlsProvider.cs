@@ -23,7 +23,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-#if SECURITY_DEP
+#if SECURITY_DEP && MONO_FEATURE_BTLS
 #if MONO_SECURITY_ALIAS
 extern alias MonoSecurity;
 #endif
@@ -32,7 +32,6 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Authentication;
 
@@ -59,12 +58,9 @@ namespace Mono.Btls
 			get { return "btls"; }
 		}
 
-		[MethodImpl (MethodImplOptions.InternalCall)]
-		public extern static bool IsSupported ();
-
 		internal MonoBtlsProvider ()
 		{
-			if (!IsSupported ())
+			if (!MNS.MonoTlsProviderFactory.IsBtlsSupported ())
 				throw new NotSupportedException ("BTLS is not supported in this runtime.");
 		}
 
@@ -123,7 +119,7 @@ namespace Mono.Btls
 			else
 				param = MonoBtlsX509VerifyParam.GetSslServer ();
 
-			if (string.IsNullOrEmpty (targetHost))
+			if (targetHost == null)
 				return param;
 
 			try {

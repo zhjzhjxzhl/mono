@@ -23,7 +23,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-#if SECURITY_DEP
+#if SECURITY_DEP && MONO_FEATURE_BTLS
 #if MONO_SECURITY_ALIAS
 extern alias MonoSecurity;
 #endif
@@ -135,7 +135,7 @@ namespace Mono.Btls
 			if (IsServer) {
 				SetPrivateCertificate (nativeServerCertificate);
 			} else {
-				ssl.SetServerName (TargetHost);
+				ssl.SetServerName (ServerName);
 			}
 		}
 
@@ -154,12 +154,9 @@ namespace Mono.Btls
 			}
 		}
 
-		Exception GetException (MonoBtlsSslError status)
+		static Exception GetException (MonoBtlsSslError status)
 		{
 			var error = MonoBtlsError.GetError ();
-			if (error == null)
-				return new MonoBtlsException (status);
-
 			var text = MonoBtlsError.GetErrorString (error);
 			return new MonoBtlsException ("{0} {1}", status, text);
 		}
@@ -236,14 +233,7 @@ namespace Mono.Btls
 			if (!IsServer)
 				ctx.SetSelectCallback (SelectCallback);
 
-			var host = TargetHost;
-			if (!string.IsNullOrEmpty (host)) {
-				var pos = TargetHost.IndexOf (':');
-				if (pos > 0)
-					host = host.Substring (0, pos);
-			}
-
-			ctx.SetVerifyParam (MonoBtlsProvider.GetVerifyParam (host, IsServer));
+			ctx.SetVerifyParam (MonoBtlsProvider.GetVerifyParam (ServerName, IsServer));
 
 			TlsProtocolCode minProtocol, maxProtocol;
 			GetProtocolVersions (out minProtocol, out maxProtocol);
@@ -280,11 +270,13 @@ namespace Mono.Btls
 
 			var cipher = (CipherSuiteCode)ssl.GetCipher ();
 			var protocol = (TlsProtocolCode)ssl.GetVersion ();
+			var serverName = ssl.GetServerName ();
 			Debug ("GET CONNECTION INFO: {0:x}:{0} {1:x}:{1} {2}", cipher, protocol, (TlsProtocolCode)protocol);
 
 			connectionInfo = new MonoTlsConnectionInfo {
 				CipherSuiteCode = cipher,
-				ProtocolVersion = GetProtocol (protocol)
+				ProtocolVersion = GetProtocol (protocol),
+				PeerDomainName = serverName
 			};
 		}
 

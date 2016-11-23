@@ -339,7 +339,6 @@ struct _MonoDomain {
 	/* Needed by Thread:GetDomainID() */
 	gint32             domain_id;
 	gint32             shadow_serial;
-	unsigned char      inet_family_hint; // used in socket-io.c as a cache
 	GSList             *domain_assemblies;
 	MonoAssembly       *entry_assembly;
 	char               *friendly_name;
@@ -386,10 +385,6 @@ struct _MonoDomain {
 
 	/* Information maintained by the JIT engine */
 	gpointer runtime_info;
-
-	/*thread pool jobs, used to coordinate shutdown.*/
-	volatile int			threadpool_jobs;
-	gpointer				cleanup_semaphore;
 	
 	/* Contains the compiled runtime invoke wrapper used by finalizers */
 	gpointer            finalize_runtime_invoke;
@@ -702,7 +697,7 @@ void
 mono_context_init_checked (MonoDomain *domain, MonoError *error);
 
 gboolean
-mono_assembly_get_reference_assembly_attribute (MonoAssembly *assembly, MonoError *error);
+mono_assembly_has_reference_assembly_attribute (MonoAssembly *assembly, MonoError *error);
 
 
 #endif /* __MONO_METADATA_DOMAIN_INTERNALS_H__ */

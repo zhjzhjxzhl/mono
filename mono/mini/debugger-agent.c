@@ -669,7 +669,7 @@ static MonoGHashTable *tid_to_thread_obj;
 
 static MonoNativeThreadId debugger_thread_id;
 
-static HANDLE debugger_thread_handle;
+static MonoThreadHandle *debugger_thread_handle;
 
 static int log_level;
 
@@ -1629,7 +1629,7 @@ stop_debugger_thread (void)
 static void
 start_debugger_thread (void)
 {
-	debugger_thread_handle = mono_threads_create_thread (debugger_thread, NULL, 0, NULL);
+	debugger_thread_handle = mono_threads_create_thread (debugger_thread, NULL, NULL, NULL);
 	g_assert (debugger_thread_handle);
 }
 
@@ -2309,7 +2309,7 @@ decode_ptr_id (guint8 *buf, guint8 **endbuf, guint8 *limit, IdType type, MonoDom
 	res = (Id *)g_ptr_array_index (ids [type], GPOINTER_TO_INT (id - 1));
 	dbg_unlock ();
 
-	if (res->domain == NULL) {
+	if (res->domain == NULL || res->domain->state == MONO_APPDOMAIN_UNLOADED) {
 		DEBUG_PRINTF (1, "ERR_UNLOADED, id=%d, type=%d.\n", id, type);
 		*err = ERR_UNLOADED;
 		return NULL;
@@ -5397,7 +5397,10 @@ ss_create (MonoInternalThread *thread, StepSize size, StepDepth depth, StepFilte
 	tls = (DebuggerTlsData *)mono_g_hash_table_lookup (thread_to_tls, thread);
 	mono_loader_unlock ();
 	g_assert (tls);
-	g_assert (tls->context.valid);
+	if (!tls->context.valid) {
+		DEBUG_PRINTF (1, "Received a single step request on a thread with no managed frames.");
+		return ERR_INVALID_ARGUMENT;
+	}
 
 	if (tls->restore_state.valid && MONO_CONTEXT_GET_IP (&tls->context.ctx) != MONO_CONTEXT_GET_IP (&tls->restore_state.ctx)) {
 		/*
@@ -6685,7 +6688,7 @@ do_invoke_method (DebuggerTlsData *tls, Buffer *buf, InvokeData *invoke, guint8 
 
 	if (!m->klass->valuetype && !(m->flags & METHOD_ATTRIBUTE_STATIC) && !this_arg) {
 		if (!strcmp (m->name, ".ctor")) {
-			if (m->klass->flags & TYPE_ATTRIBUTE_ABSTRACT)
+			if (mono_class_is_abstract (m->klass))
 				return ERR_INVALID_ARGUMENT;
 			else {
 				MonoError error;
@@ -8038,7 +8041,7 @@ type_commands_internal (int command, MonoClass *klass, MonoDomain *domain, guint
 			buffer_add_id (buf, 0);
 		buffer_add_int (buf, klass->type_token);
 		buffer_add_byte (buf, klass->rank);
-		buffer_add_int (buf, klass->flags);
+		buffer_add_int (buf, mono_class_get_flags (klass));
 		b = 0;
 		type = &klass->byval_arg;
 		// FIXME: Can't decide whenever a class represents a byref type
@@ -8052,9 +8055,9 @@ type_commands_internal (int command, MonoClass *klass, MonoDomain *domain, guint
 			b |= (1 << 3);
 		if (klass->enumtype)
 			b |= (1 << 4);
-		if (klass->generic_container)
+		if (mono_class_is_gtd (klass))
 			b |= (1 << 5);
-		if (klass->generic_container || klass->generic_class)
+		if (mono_class_is_gtd (klass) || mono_class_is_ginst (klass))
 			b |= (1 << 6);
 		buffer_add_byte (buf, b);
 		nnested = 0;
@@ -8066,25 +8069,25 @@ type_commands_internal (int command, MonoClass *klass, MonoDomain *domain, guint
 		while ((nested = mono_class_get_nested_types (klass, &iter)))
 			buffer_add_typeid (buf, domain, nested);
 		if (CHECK_PROTOCOL_VERSION (2, 12)) {
-			if (klass->generic_container)
+			if (mono_class_is_gtd (klass))
 				buffer_add_typeid (buf, domain, klass);
-			else if (klass->generic_class)
-				buffer_add_typeid (buf, domain, klass->generic_class->container_class);
+			else if (mono_class_is_ginst (klass))
+				buffer_add_typeid (buf, domain, mono_class_get_generic_class (klass)->container_class);
 			else
 				buffer_add_id (buf, 0);
 		}
 		if (CHECK_PROTOCOL_VERSION (2, 15)) {
 			int count, i;
 
-			if (klass->generic_class) {
-				MonoGenericInst *inst = klass->generic_class->context.class_inst;
+			if (mono_class_is_ginst (klass)) {
+				MonoGenericInst *inst = mono_class_get_generic_class (klass)->context.class_inst;
 
 				count = inst->type_argc;
 				buffer_add_int (buf, count);
 				for (i = 0; i < count; i++)
 					buffer_add_typeid (buf, domain, mono_class_from_mono_type (inst->type_argv [i]));
-			} else if (klass->generic_container) {
-				MonoGenericContainer *container = klass->generic_container;
+			} else if (mono_class_is_gtd (klass)) {
+				MonoGenericContainer *container = mono_class_get_generic_container (klass);
 				MonoClass *pklass;
 
 				count = container->type_argc;
@@ -8913,7 +8916,7 @@ method_commands_internal (int command, MonoMethod *method, MonoDomain *domain, g
 		}
 		ginst = mono_metadata_get_generic_inst (type_argc, type_argv);
 		g_free (type_argv);
-		tmp_context.class_inst = method->klass->generic_class ? method->klass->generic_class->context.class_inst : NULL;
+		tmp_context.class_inst = mono_class_is_ginst (method->klass) ? mono_class_get_generic_class (method->klass)->context.class_inst : NULL;
 		tmp_context.method_inst = ginst;
 
 		inflated = mono_class_inflate_generic_method_checked (method, &tmp_context, &error);

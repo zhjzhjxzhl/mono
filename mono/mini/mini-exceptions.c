@@ -613,23 +613,23 @@ get_generic_context_from_stack_frame (MonoJitInfo *ji, gpointer generic_info)
 		klass = vtable->klass;
 	}
 
-	//g_assert (!method->klass->generic_container);
-	if (method->klass->generic_class)
-		method_container_class = method->klass->generic_class->container_class;
+	//g_assert (!mono_class_is_gtd (method->klass));
+	if (mono_class_is_ginst (method->klass))
+		method_container_class = mono_class_get_generic_class (method->klass)->container_class;
 	else
 		method_container_class = method->klass;
 
 	/* class might refer to a subclass of method's class */
-	while (!(klass == method->klass || (klass->generic_class && klass->generic_class->container_class == method_container_class))) {
+	while (!(klass == method->klass || (mono_class_is_ginst (klass) && mono_class_get_generic_class (klass)->container_class == method_container_class))) {
 		klass = klass->parent;
 		g_assert (klass);
 	}
 
-	if (klass->generic_class || klass->generic_container)
+	if (mono_class_is_ginst (klass) || mono_class_is_gtd (klass))
 		context.class_inst = mini_class_get_context (klass)->class_inst;
 
-	if (klass->generic_class)
-		g_assert (mono_class_has_parent_and_ignore_generics (klass->generic_class->container_class, method_container_class));
+	if (mono_class_is_ginst (klass))
+		g_assert (mono_class_has_parent_and_ignore_generics (mono_class_get_generic_class (klass)->container_class, method_container_class));
 	else
 		g_assert (mono_class_has_parent_and_ignore_generics (klass, method_container_class));
 
@@ -1229,7 +1229,7 @@ wrap_non_exception_throws (MonoMethod *m)
 
 	klass = mono_class_get_runtime_compat_attr_class ();
 
-	attrs = mono_custom_attrs_from_assembly_checked (ass, &error);
+	attrs = mono_custom_attrs_from_assembly_checked (ass, FALSE, &error);
 	mono_error_cleanup (&error); /* FIXME don't swallow the error */
 	if (attrs) {
 		for (i = 0; i < attrs->num_attrs; ++i) {
@@ -2724,7 +2724,7 @@ mono_thread_state_init_from_sigctx (MonoThreadUnwindState *ctx, void *sigctx)
 	MonoThreadInfo *thread = mono_thread_info_current_unchecked ();
 	if (!thread) {
 		ctx->valid = FALSE;
-		G_BREAKPOINT ();
+		g_error ("Invoked mono_thread_state_init_from_sigctx from non-Mono thread");
 		return FALSE;
 	}
 

@@ -297,7 +297,7 @@ mono_error_set_assembly_load_simple (MonoError *oerror, const char *assembly_nam
 	if (refection_only)
 		mono_error_set_assembly_load (oerror, assembly_name, "Cannot resolve dependency to assembly because it has not been preloaded. When using the ReflectionOnly APIs, dependent assemblies must be pre-loaded or loaded on demand through the ReflectionOnlyAssemblyResolve event.");
 	else
-		mono_error_set_assembly_load (oerror, assembly_name, "Could not load file or assembly or one of its dependencies.");
+		mono_error_set_assembly_load (oerror, assembly_name, "Could not load file or assembly '%s' or one of its dependencies.", assembly_name);
 }
 
 void
@@ -478,6 +478,16 @@ mono_error_set_exception_instance (MonoError *oerror, MonoException *exc)
 	mono_error_prepare (error);
 	error->error_code = MONO_ERROR_EXCEPTION_INSTANCE;
 	error->exn.instance_handle = mono_gchandle_new (exc ? &exc->object : NULL, FALSE);
+}
+
+void
+mono_error_set_exception_handle (MonoError *oerror, MonoExceptionHandle exc)
+{
+	MonoErrorInternal *error = (MonoErrorInternal*)oerror;
+
+	mono_error_prepare (error);
+	error->error_code = MONO_ERROR_EXCEPTION_INSTANCE;
+	error->exn.instance_handle = mono_gchandle_from_handle (MONO_HANDLE_CAST(MonoObject, exc), FALSE);
 }
 
 void

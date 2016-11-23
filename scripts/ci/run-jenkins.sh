@@ -26,7 +26,7 @@ if [[ ${CI_TAGS} == *'mobile_static'* ]];
 elif [[ ${CI_TAGS} == *'acceptance-tests'* ]];
     then
     EXTRA_CONF_FLAGS="${EXTRA_CONF_FLAGS} --prefix=${WORKSPACE}/tmp/mono-acceptance-tests --with-sgen-default-concurrent=yes";
-elif [[ ${label} != w* ]] && [[ ${label} != 'debian-ppc64el' ]] && [[ ${label} != 'centos-s390x' ]] && [[ ${CI_TAGS} != *'monolite'* ]];
+elif [[ ${label} != w* ]] && [[ ${label} != 'debian-8-ppc64el' ]] && [[ ${label} != 'centos-s390x' ]] && [[ ${CI_TAGS} != *'monolite'* ]];
     then
     # Override the defaults to skip profiles
     # only enable the mobile profiles and mobile_static on the main architectures
@@ -38,6 +38,8 @@ if [ -x "/usr/bin/dpkg-architecture" ];
 	then
 	EXTRA_CONF_FLAGS="$EXTRA_CONF_FLAGS --host=`/usr/bin/dpkg-architecture -qDEB_HOST_GNU_TYPE`"
 	#force build arch = dpkg arch, sometimes misdetected
+	mkdir -p ~/.config/.mono/
+	wget -qO- https://download.mono-project.com/test/new-certs.tgz| tar zx -C ~/.config/.mono/
 fi
 
 
@@ -54,7 +56,10 @@ fi
 
 if [[ ${CI_TAGS} == *'monolite'* ]]; then make get-monolite-latest; fi
 
-${TESTCMD} --label=make --timeout=300m --fatal make -j4 -w V=1
+make_parallelism=-j4
+if [[ ${label} == 'debian-8-ppc64el' ]]; then make_parallelism=-j1; fi
+
+${TESTCMD} --label=make --timeout=300m --fatal make ${make_parallelism} -w V=1
 
 if [[ ${CI_TAGS} == *'acceptance-tests'* ]];
     then
@@ -62,6 +67,9 @@ if [[ ${CI_TAGS} == *'acceptance-tests'* ]];
 elif [[ ${CI_TAGS} == *'profiler-stress-tests'* ]];
     then
 	$(dirname "${BASH_SOURCE[0]}")/run-test-profiler-stress-tests.sh
+elif [[ ${CI_TAGS} == *'no-tests'* ]];
+    then
+	exit 0
 else
 	make check-ci
 fi

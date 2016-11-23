@@ -6,7 +6,8 @@
  * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
-#include "mini.h"
+#include "config.h"
+
 #include <mono/metadata/debug-helpers.h>
 #include <mono/metadata/debug-mono-symfile.h>
 #include <mono/metadata/mempool-internals.h>
@@ -32,6 +33,8 @@
 #include "llvm-jit.h"
 #include "aot-compiler.h"
 #include "mini-llvm.h"
+
+#ifndef DISABLE_JIT
 
 #ifdef __MINGW32__
 
@@ -148,6 +151,7 @@ typedef struct {
 	LLVMValueRef rgctx_arg;
 	LLVMValueRef this_arg;
 	LLVMTypeRef *vreg_types;
+	gboolean *is_vphi;
 	LLVMTypeRef method_type;
 	LLVMBasicBlockRef init_bb, inited_bb;
 	gboolean *is_dead;
@@ -354,6 +358,36 @@ simd_class_to_llvm_type (EmitContext *ctx, MonoClass *klass)
 		return LLVMVectorType (LLVMInt8Type (), 16);
 	} else if (!strcmp (klass->name, "Vector16b")) {
 		return LLVMVectorType (LLVMInt8Type (), 16);
+	} else if (!strcmp (klass->name, "Vector2")) {
+		/* System.Numerics */
+		return LLVMVectorType (LLVMFloatType (), 4);
+	} else if (!strcmp (klass->name, "Vector3")) {
+		return LLVMVectorType (LLVMFloatType (), 4);
+	} else if (!strcmp (klass->name, "Vector4")) {
+		return LLVMVectorType (LLVMFloatType (), 4);
+	} else if (!strcmp (klass->name, "Vector`1")) {
+		MonoType *etype = mono_class_get_generic_class (klass)->context.class_inst->type_argv [0];
+		switch (etype->type) {
+		case MONO_TYPE_I1:
+		case MONO_TYPE_U1:
+			return LLVMVectorType (LLVMInt8Type (), 16);
+		case MONO_TYPE_I2:
+		case MONO_TYPE_U2:
+			return LLVMVectorType (LLVMInt16Type (), 8);
+		case MONO_TYPE_I4:
+		case MONO_TYPE_U4:
+			return LLVMVectorType (LLVMInt32Type (), 4);
+		case MONO_TYPE_I8:
+		case MONO_TYPE_U8:
+			return LLVMVectorType (LLVMInt64Type (), 2);
+		case MONO_TYPE_R4:
+			return LLVMVectorType (LLVMFloatType (), 4);
+		case MONO_TYPE_R8:
+			return LLVMVectorType (LLVMDoubleType (), 2);
+		default:
+			g_assert_not_reached ();
+			return NULL;
+		}
 	} else {
 		printf ("%s\n", klass->name);
 		NOT_IMPLEMENTED;
@@ -912,6 +946,8 @@ simd_op_to_intrins (int opcode)
 		return "llvm.x86.sse2.pmulh.w";
 	case OP_PMULW_HIGH_UN:
 		return "llvm.x86.sse2.pmulhu.w";
+	case OP_DPPS:
+		return "llvm.x86.sse41.dpps";
 #endif
 	default:
 		g_assert_not_reached ();
@@ -3485,6 +3521,9 @@ process_call (EmitContext *ctx, MonoBasicBlock *bb, LLVMBuilderRef *builder_ref,
 	 */
 
 	lcall = emit_call (ctx, bb, &builder, callee, args, LLVMCountParamTypes (llvm_sig));
+
+	if (ins->opcode != OP_TAILCALL && LLVMGetInstructionOpcode (lcall) == LLVMCall)
+		mono_llvm_set_call_notail (lcall);
 
 	/*
 	 * Modify cconv and parameter attributes to pass rgctx/imt correctly.
@@ -6434,6 +6473,18 @@ process_bb (EmitContext *ctx, MonoBasicBlock *bb)
 			break;
 		}
 
+		case OP_DPPS: {
+			LLVMValueRef args [3];
+
+			args [0] = lhs;
+			args [1] = rhs;
+			/* 0xf1 == multiply all 4 elements, add them together, and store the result to the lowest element */
+			args [2] = LLVMConstInt (LLVMInt32Type (), 0xf1, FALSE);
+
+			values [ins->dreg] = LLVMBuildCall (builder, get_intrinsic (ctx, simd_op_to_intrins (ins->opcode)), args, 3, dname);
+			break;
+		}
+
 #endif /* SIMD */
 
 		case OP_DUMMY_USE:
@@ -6568,7 +6619,7 @@ process_bb (EmitContext *ctx, MonoBasicBlock *bb)
 
 		/* Convert the value to the type required by phi nodes */
 		if (spec [MONO_INST_DEST] != ' ' && !MONO_IS_STORE_MEMBASE (ins) && ctx->vreg_types [ins->dreg]) {
-			if (!values [ins->dreg])
+			if (ctx->is_vphi [ins->dreg])
 				/* vtypes */
 				values [ins->dreg] = addresses [ins->dreg];
 			else
@@ -6717,6 +6768,7 @@ free_ctx (EmitContext *ctx)
 	g_free (ctx->values);
 	g_free (ctx->addresses);
 	g_free (ctx->vreg_types);
+	g_free (ctx->is_vphi);
 	g_free (ctx->vreg_cli_types);
 	g_free (ctx->is_dead);
 	g_free (ctx->unreachable);
@@ -6777,6 +6829,7 @@ mono_llvm_emit_method (MonoCompile *cfg)
 	 */
 	ctx->addresses = g_new0 (LLVMValueRef, cfg->next_vreg);
 	ctx->vreg_types = g_new0 (LLVMTypeRef, cfg->next_vreg);
+	ctx->is_vphi = g_new0 (gboolean, cfg->next_vreg);
 	ctx->vreg_cli_types = g_new0 (MonoType*, cfg->next_vreg);
 	ctx->phi_values = g_ptr_array_sized_new (256);
 	/* 
@@ -7125,8 +7178,11 @@ emit_method_inner (EmitContext *ctx)
 				for (i = 0; i < ins->inst_phi_args [0]; i++) {
 					int sreg1 = ins->inst_phi_args [i + 1];
 					
-					if (sreg1 != -1)
+					if (sreg1 != -1) {
+						if (ins->opcode == OP_VPHI)
+							ctx->is_vphi [sreg1] = TRUE;
 						ctx->vreg_types [sreg1] = phi_type;
+					}
 				}
 				break;
 				}
@@ -7846,6 +7902,7 @@ typedef enum {
 	INTRINS_SSE_PSUBUSB,
 	INTRINS_SSE_PAVGB,
 	INTRINS_SSE_PAUSE,
+	INTRINS_SSE_DPPS,
 #endif
 	INTRINS_NUM
 } IntrinsicId;
@@ -7927,7 +7984,8 @@ static IntrinsicDesc intrinsics[] = {
 	{INTRINS_SSE_PADDUSB, "llvm.x86.sse2.paddus.b"},
 	{INTRINS_SSE_PSUBUSB, "llvm.x86.sse2.psubus.b"},
 	{INTRINS_SSE_PAVGB, "llvm.x86.sse2.pavg.b"},
-	{INTRINS_SSE_PAUSE, "llvm.x86.sse2.pause"}
+	{INTRINS_SSE_PAUSE, "llvm.x86.sse2.pause"},
+	{INTRINS_SSE_DPPS, "llvm.x86.sse41.dpps"}
 #endif
 };
 
@@ -8160,6 +8218,13 @@ add_intrinsic (LLVMModuleRef module, int id)
 	case INTRINS_SSE_PAUSE:
 		AddFunc (module, "llvm.x86.sse2.pause", LLVMVoidType (), NULL, 0);
 		break;
+	case INTRINS_SSE_DPPS:
+		ret_type = type_to_simd_type (MONO_TYPE_R4);
+		arg_types [0] = type_to_simd_type (MONO_TYPE_R4);
+		arg_types [1] = type_to_simd_type (MONO_TYPE_R4);
+		arg_types [2] = LLVMInt32Type ();
+		AddFunc (module, name, ret_type, arg_types, 3);
+		break;
 #endif
 	default:
 		g_assert_not_reached ();
@@ -8383,7 +8448,7 @@ mono_llvm_create_aot_module (MonoAssembly *assembly, const char *global_prefix, 
 	module->llvm_only = llvm_only;
 	/* The first few entries are reserved */
 	module->max_got_offset = 16;
-	module->context = LLVMContextCreate ();
+	module->context = LLVMGetGlobalContext ();
 
 	if (llvm_only)
 		/* clang ignores our debug info because it has an invalid version */
@@ -9191,3 +9256,27 @@ default_mono_llvm_unhandled_exception (void)
  *   code.
  * - use pointer types to help optimizations.
  */
+
+#else /* DISABLE_JIT */
+
+void
+mono_llvm_cleanup (void)
+{
+}
+
+void
+mono_llvm_free_domain_info (MonoDomain *domain)
+{
+}
+
+void
+mono_llvm_init (void)
+{
+}
+
+void
+default_mono_llvm_unhandled_exception (void)
+{
+}
+
+#endif /* DISABLE_JIT */

@@ -43,6 +43,7 @@
 #include <mono/metadata/w32mutex.h>
 #include <mono/metadata/w32semaphore.h>
 #include <mono/metadata/w32event.h>
+#include <mono/metadata/w32process.h>
 #include <metadata/threads.h>
 #include <metadata/profiler-private.h>
 #include <mono/metadata/coree.h>
@@ -66,7 +67,6 @@ MONO_FAST_TLS_DECLARE(tls_appdomain);
 	MonoThreadInfo *info; \
 	MONO_FAST_TLS_SET (tls_appdomain,x); \
 	mono_native_tls_set_value (appdomain_thread_id, x); \
-	mono_gc_set_current_thread_appdomain (x); \
 	info = mono_thread_info_current (); \
 	if (info) \
 		mono_thread_info_tls_set (info, TLS_KEY_DOMAIN, (x));	\
@@ -78,7 +78,6 @@ MONO_FAST_TLS_DECLARE(tls_appdomain);
 #define SET_APPDOMAIN(x) do {						\
 		MonoThreadInfo *info;								\
 		mono_native_tls_set_value (appdomain_thread_id, x);	\
-		mono_gc_set_current_thread_appdomain (x);		\
 		info = mono_thread_info_current ();				\
 		if (info)												 \
 			mono_thread_info_tls_set (info, TLS_KEY_DOMAIN, (x));	\
@@ -512,7 +511,7 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 	static MonoDomain *domain = NULL;
 	MonoAssembly *ass = NULL;
 	MonoImageOpenStatus status = MONO_IMAGE_OK;
-	const MonoRuntimeInfo* runtimes [G_N_ELEMENTS (supported_runtimes) + 1];
+	const MonoRuntimeInfo* runtimes [G_N_ELEMENTS (supported_runtimes) + 1] = { NULL };
 	int n, dummy;
 
 #ifdef DEBUG_DOMAIN_UNLOAD
@@ -522,7 +521,7 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 	if (domain)
 		g_assert_not_reached ();
 
-#ifdef HOST_WIN32
+#if defined(HOST_WIN32) && G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT)
 	/* Avoid system error message boxes. */
 	SetErrorMode (SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
 #endif
@@ -536,6 +535,7 @@ mono_init_internal (const char *filename, const char *exe_filename, const char *
 	mono_w32mutex_init ();
 	mono_w32semaphore_init ();
 	mono_w32event_init ();
+	mono_w32process_init ();
 
 #ifndef DISABLE_PERFCOUNTERS
 	mono_perfcounters_init ();
@@ -899,6 +899,8 @@ mono_cleanup (void)
 
 	mono_native_tls_free (appdomain_thread_id);
 	mono_coop_mutex_destroy (&appdomains_mutex);
+
+	mono_w32process_cleanup ();
 
 #ifndef HOST_WIN32
 	wapi_cleanup ();

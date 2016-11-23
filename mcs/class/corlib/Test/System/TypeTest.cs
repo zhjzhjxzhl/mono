@@ -4197,6 +4197,17 @@ namespace MonoTests.System
 			MustTLE (string.Format ("{0}ZZZZ,{1}", typeof (MyRealEnum).FullName, aqn));
 		}
 
+		[Test]
+		public void GetTypeExceptionMsg () {
+			string typeName = "system.int32, foo";
+			try {
+				Type.GetType(typeName, true, false);
+			} catch (TypeLoadException ex) {
+				Assert.IsTrue (ex.Message.Contains ("system.int32"));
+				Assert.IsTrue (ex.Message.Contains ("foo"));
+			}
+		}
+
 	   	delegate void MyAction<in T>(T ag);
 
 		[Test] //bug #668506
@@ -4323,6 +4334,24 @@ namespace MonoTests.System
 
 		}
 #endif
+
+
+		[Test]
+		public void GetTypeBadArity()
+		{
+			// Regression test for #46250
+			try {
+				Type.GetType ("System.Collections.Generic.Dictionary`2[System.String]", true);
+				Assert.Fail ("Did not throw an exception (#1)");
+			} catch (ArgumentException) {
+			}
+
+			try {
+				Type.GetType ("System.Collections.Generic.Dictionary`2[System.String,System.Int32,System.Int64]", true);
+				Assert.Fail ("Did not throw an exception (#2)");
+			} catch (ArgumentException) {
+			}
+		}
 
 		public abstract class Stream : IDisposable
 		{

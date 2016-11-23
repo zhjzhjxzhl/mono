@@ -12,6 +12,7 @@
 #if defined(USE_WINDOWS_BACKEND)
 
 #include <mono/utils/mono-compiler.h>
+#include <mono/utils/mono-threads-debug.h>
 #include <limits.h>
 
 
@@ -63,13 +64,40 @@ mono_threads_suspend_begin_async_suspend (MonoThreadInfo *info, gboolean interru
 	}
 
 	CloseHandle (handle);
-	return info->suspend_can_continue;
+	return TRUE;
 }
 
 gboolean
 mono_threads_suspend_check_suspend_result (MonoThreadInfo *info)
 {
 	return info->suspend_can_continue;
+}
+
+static void CALLBACK
+abort_apc (ULONG_PTR param)
+{
+	THREADS_INTERRUPT_DEBUG ("%06d - abort_apc () called", GetCurrentThreadId ());
+}
+
+void
+mono_threads_suspend_abort_syscall (MonoThreadInfo *info)
+{
+	DWORD id = mono_thread_info_get_tid (info);
+	HANDLE handle;
+
+	handle = OpenThread (THREAD_ALL_ACCESS, FALSE, id);
+	g_assert (handle);
+
+	THREADS_INTERRUPT_DEBUG ("%06d - Aborting syscall in thread %06d", GetCurrentThreadId (), id);
+	QueueUserAPC ((PAPCFUNC)abort_apc, handle, (ULONG_PTR)NULL);
+
+	CloseHandle (handle);
+}
+
+gboolean
+mono_threads_suspend_needs_abort_syscall (void)
+{
+	return TRUE;
 }
 
 gboolean
@@ -128,33 +156,46 @@ mono_threads_suspend_free (MonoThreadInfo *info)
 {
 }
 
+void
+mono_threads_suspend_init_signals (void)
+{
+}
+
+gint
+mono_threads_suspend_search_alternative_signal (void)
+{
+	g_assert_not_reached ();
+}
+
+gint
+mono_threads_suspend_get_suspend_signal (void)
+{
+	return -1;
+}
+
+gint
+mono_threads_suspend_get_restart_signal (void)
+{
+	return -1;
+}
+
+gint
+mono_threads_suspend_get_abort_signal (void)
+{
+	return -1;
+}
+
 #endif
 
 #if defined (HOST_WIN32)
 
-void
-mono_threads_platform_register (MonoThreadInfo *info)
-{
-	HANDLE thread_handle;
-
-	thread_handle = GetCurrentThread ();
-	g_assert (thread_handle);
-
-	/* The handle returned by GetCurrentThread () is a pseudo handle, so it can't
-	 * be used to refer to the thread from other threads for things like aborting. */
-	DuplicateHandle (GetCurrentProcess (), thread_handle, GetCurrentProcess (), &thread_handle, THREAD_ALL_ACCESS, TRUE, 0);
-
-	g_assert (!info->handle);
-	info->handle = thread_handle;
-}
-
 int
-mono_threads_platform_create_thread (MonoThreadStart thread_fn, gpointer thread_data, gsize stack_size, MonoNativeThreadId *out_tid)
+mono_threads_platform_create_thread (MonoThreadStart thread_fn, gpointer thread_data, gsize* const stack_size, MonoNativeThreadId *out_tid)
 {
 	HANDLE result;
 	DWORD thread_id;
 
-	result = CreateThread (NULL, stack_size, (LPTHREAD_START_ROUTINE) thread_fn, thread_data, 0, &thread_id);
+	result = CreateThread (NULL, stack_size ? *stack_size : 0, (LPTHREAD_START_ROUTINE) thread_fn, thread_data, 0, &thread_id);
 	if (!result)
 		return -1;
 
@@ -164,6 +205,12 @@ mono_threads_platform_create_thread (MonoThreadStart thread_fn, gpointer thread_
 
 	if (out_tid)
 		*out_tid = thread_id;
+
+	if (stack_size) {
+		// TOOD: Use VirtualQuery to get correct value 
+		// http://stackoverflow.com/questions/2480095/thread-stack-size-on-windows-visual-c
+		*stack_size = 2 * 1024 * 1024;
+	}
 
 	return 0;
 }
@@ -249,19 +296,9 @@ mono_threads_platform_yield (void)
 }
 
 void
-mono_threads_platform_exit (int exit_code)
+mono_threads_platform_exit (gsize exit_code)
 {
-	mono_thread_info_detach ();
 	ExitThread (exit_code);
-}
-
-void
-mono_threads_platform_unregister (MonoThreadInfo *info)
-{
-	g_assert (info->handle);
-
-	CloseHandle (info->handle);
-	info->handle = NULL;
 }
 
 int
@@ -269,29 +306,6 @@ mono_threads_get_max_stack_size (void)
 {
 	//FIXME
 	return INT_MAX;
-}
-
-gpointer
-mono_threads_platform_duplicate_handle (MonoThreadInfo *info)
-{
-	HANDLE thread_handle;
-
-	g_assert (info->handle);
-	DuplicateHandle (GetCurrentProcess (), info->handle, GetCurrentProcess (), &thread_handle, THREAD_ALL_ACCESS, TRUE, 0);
-
-	return thread_handle;
-}
-
-HANDLE
-mono_threads_platform_open_thread_handle (HANDLE handle, MonoNativeThreadId tid)
-{
-	return OpenThread (THREAD_ALL_ACCESS, TRUE, tid);
-}
-
-void
-mono_threads_platform_close_thread_handle (HANDLE handle)
-{
-	CloseHandle (handle);
 }
 
 #if defined(_MSC_VER)
@@ -324,16 +338,6 @@ mono_native_thread_set_name (MonoNativeThreadId tid, const char *name)
 	__except(EXCEPTION_EXECUTE_HANDLER) {
 	}
 #endif
-}
-
-void
-mono_threads_platform_set_exited (gpointer handle)
-{
-}
-
-void
-mono_threads_platform_init (void)
-{
 }
 
 #endif

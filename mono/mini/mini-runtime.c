@@ -65,7 +65,7 @@
 #include <mono/utils/mono-threads.h>
 #include <mono/utils/mono-threads-coop.h>
 #include <mono/utils/checked-build.h>
-#include <mono/utils/w32handle.h>
+#include <mono/metadata/w32handle.h>
 #include <mono/io-layer/io-layer.h>
 
 #include "mini.h"
@@ -253,6 +253,8 @@ mono_print_method_from_ip (void *ip)
 	MonoGenericSharingContext*gsctx;
 	const char *shared_type;
 
+	if (!domain)
+		domain = mono_get_root_domain ();
 	ji = mini_jit_info_table_find_ext (domain, (char *)ip, TRUE, &target_domain);
 	if (ji && ji->is_trampoline) {
 		MonoTrampInfo *tinfo = (MonoTrampInfo *)ji->d.tramp_info;
@@ -341,7 +343,7 @@ void *mono_global_codeman_reserve (int size)
 	void *ptr;
 
 	if (mono_aot_only)
-		g_error ("Attempting to allocate from the global code manager while running with --aot-only.\n");
+		g_error ("Attempting to allocate from the global code manager while running in aot-only mode.\n");
 
 	if (!global_codeman) {
 		/* This can happen during startup */
@@ -1094,6 +1096,63 @@ mono_patch_info_list_prepend (MonoJumpInfo *list, int ip, MonoJumpInfoType type,
 	return ji;
 }
 
+#if !defined(DISABLE_LOGGING) && !defined(DISABLE_JIT)
+
+static const char* const patch_info_str[] = {
+#define PATCH_INFO(a,b) "" #a,
+#include "patch-info.h"
+#undef PATCH_INFO
+};
+
+const char*
+mono_ji_type_to_string (MonoJumpInfoType type)
+{
+	return patch_info_str [type];
+}
+
+void
+mono_print_ji (const MonoJumpInfo *ji)
+{
+	switch (ji->type) {
+	case MONO_PATCH_INFO_RGCTX_FETCH: {
+		MonoJumpInfoRgctxEntry *entry = ji->data.rgctx_entry;
+
+		printf ("[RGCTX_FETCH ");
+		mono_print_ji (entry->data);
+		printf (" - %s]", mono_rgctx_info_type_to_str (entry->info_type));
+		break;
+	}
+	case MONO_PATCH_INFO_METHODCONST: {
+		char *s = mono_method_full_name (ji->data.method, TRUE);
+		printf ("[METHODCONST - %s]", s);
+		g_free (s);
+		break;
+	}
+	case MONO_PATCH_INFO_INTERNAL_METHOD: {
+		printf ("[INTERNAL_METHOD - %s]", ji->data.name);
+		break;
+	}
+	default:
+		printf ("[%s]", patch_info_str [ji->type]);
+		break;
+	}
+}
+
+#else
+
+const char*
+mono_ji_type_to_string (MonoJumpInfoType type)
+{
+	return "";
+}
+
+void
+mono_print_ji (const MonoJumpInfo *ji)
+{
+}
+
+#endif
+
 /**
  * mono_patch_info_dup_mp:
  *
@@ -1222,6 +1281,7 @@ mono_patch_info_hash (gconstpointer data)
 	case MONO_PATCH_INFO_GOT_OFFSET:
 	case MONO_PATCH_INFO_GC_SAFE_POINT_FLAG:
 	case MONO_PATCH_INFO_AOT_MODULE:
+	case MONO_PATCH_INFO_GET_TLS_TRAMP:
 		return (ji->type << 8);
 	case MONO_PATCH_INFO_CASTCLASS_CACHE:
 		return (ji->type << 8) | (ji->data.index);
@@ -1441,11 +1501,11 @@ mono_resolve_patch_target (MonoMethod *method, MonoDomain *domain, guint8 *code,
 		break;
 	case MONO_PATCH_INFO_IID:
 		mono_class_init (patch_info->data.klass);
-		target = GINT_TO_POINTER ((int)patch_info->data.klass->interface_id);
+		target = GUINT_TO_POINTER (patch_info->data.klass->interface_id);
 		break;
 	case MONO_PATCH_INFO_ADJUSTED_IID:
 		mono_class_init (patch_info->data.klass);
-		target = GINT_TO_POINTER ((int)(-((patch_info->data.klass->interface_id + 1) * SIZEOF_VOID_P)));
+		target = GUINT_TO_POINTER ((guint32)(-((patch_info->data.klass->interface_id + 1) * SIZEOF_VOID_P)));
 		break;
 	case MONO_PATCH_INFO_VTABLE:
 		target = mono_class_vtable (domain, patch_info->data.klass);
@@ -1475,7 +1535,7 @@ mono_resolve_patch_target (MonoMethod *method, MonoDomain *domain, guint8 *code,
 		}
 
 		g_assert (vtable);
-		if (!vtable->initialized && !(vtable->klass->flags & TYPE_ATTRIBUTE_BEFORE_FIELD_INIT) && (method && mono_class_needs_cctor_run (vtable->klass, method)))
+		if (!vtable->initialized && !mono_class_is_before_field_init (vtable->klass) && (method && mono_class_needs_cctor_run (vtable->klass, method)))
 			/* Done by the generated code */
 			;
 		else {
@@ -1660,6 +1720,13 @@ mono_resolve_patch_target (MonoMethod *method, MonoDomain *domain, guint8 *code,
 	}
 	case MONO_PATCH_INFO_GSHAREDVT_IN_WRAPPER:
 		target = mini_get_gsharedvt_wrapper (TRUE, NULL, patch_info->data.sig, NULL, -1, FALSE);
+		break;
+	case MONO_PATCH_INFO_GET_TLS_TRAMP:
+#ifdef MONO_ARCH_HAVE_GET_TLS_TRAMP
+		target = mono_arch_get_get_tls_tramp ();
+#else
+		target = NULL;
+#endif
 		break;
 	default:
 		g_assert_not_reached ();
@@ -1878,6 +1945,15 @@ mono_jit_compile_method_with_opt (MonoMethod *method, guint32 opt, MonoError *er
 
 		if ((code = mono_aot_get_method_checked (domain, method, error))) {
 			MonoVTable *vtable;
+
+			if (mono_runtime_is_critical_method (method) || mono_gc_is_critical_method (method)) {
+				/*
+				 * The suspend code needs to be able to lookup these methods by ip in async context,
+				 * so preload their jit info.
+				 */
+				MonoJitInfo *ji = mono_jit_info_table_find (domain, code);
+				g_assert (ji);
+			}
 
 			/*
 			 * In llvm-only mode, method might be a shared method, so we can't initialize its class.
@@ -3086,7 +3162,7 @@ mono_get_delegate_virtual_invoke_impl (MonoMethodSignature *sig, MonoMethod *met
 		return NULL;
 
 	is_virtual_generic = method->is_inflated && mono_method_get_declaring_generic_method (method)->is_generic;
-	is_interface = method->klass->flags & TYPE_ATTRIBUTE_INTERFACE ? TRUE : FALSE;
+	is_interface = mono_class_is_interface (method->klass);
 	load_imt_reg = is_virtual_generic || is_interface;
 
 	if (is_interface)
@@ -4201,7 +4277,7 @@ mono_precompile_assembly (MonoAssembly *ass, void *user_data)
 		}
 		if (method->flags & METHOD_ATTRIBUTE_ABSTRACT)
 			continue;
-		if (method->is_generic || method->klass->generic_container)
+		if (method->is_generic || mono_class_is_gtd (method->klass))
 			continue;
 
 		count++;
@@ -4256,3 +4332,23 @@ mono_personality (void)
 	/* Not used */
 	g_assert_not_reached ();
 }
+
+// Custom handlers currently only implemented by Windows.
+#ifndef HOST_WIN32
+gboolean
+mono_runtime_install_custom_handlers (const char *handlers)
+{
+	return FALSE;
+}
+
+void
+mono_runtime_install_custom_handlers_usage (void)
+{
+	fprintf (stdout,
+		 "Custom Handlers:\n"
+		 "   --handlers=HANDLERS            Enable handler support, HANDLERS is a comma\n"
+		 "                                  separated list of available handlers to install.\n"
+		 "\n"
+		 "No handlers supported on current platform.\n");
+}
+#endif /* HOST_WIN32 */

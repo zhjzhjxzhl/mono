@@ -29,6 +29,7 @@
 #include "utils/mono-logger-internals.h"
 #include "utils/mono-threads-coop.h"
 #include "sgen/sgen-thread-pool.h"
+#include "utils/mono-threads.h"
 
 #ifdef HEAVY_STATISTICS
 static guint64 stat_wbarrier_set_arrayref = 0;
@@ -184,6 +185,18 @@ mono_gc_wbarrier_value_copy_bitmap (gpointer _dest, gpointer _src, int size, uns
 	sgen_wbarrier_value_copy_bitmap (_dest, _src, size, bitmap);
 }
 
+int
+mono_gc_get_suspend_signal (void)
+{
+	return mono_threads_suspend_get_suspend_signal ();
+}
+
+int
+mono_gc_get_restart_signal (void)
+{
+	return mono_threads_suspend_get_restart_signal ();
+}
+
 static MonoMethod *write_barrier_conc_method;
 static MonoMethod *write_barrier_noconc_method;
 
@@ -197,6 +210,32 @@ gboolean
 sgen_has_critical_method (void)
 {
 	return sgen_has_managed_allocator ();
+}
+
+static gboolean
+ip_in_critical_region (MonoDomain *domain, gpointer ip)
+{
+	MonoJitInfo *ji;
+	MonoMethod *method;
+
+	/*
+	 * We pass false for 'try_aot' so this becomes async safe.
+	 * It won't find aot methods whose jit info is not yet loaded,
+	 * so we preload their jit info in the JIT.
+	 */
+	ji = mono_jit_info_table_find_internal (domain, ip, FALSE, FALSE);
+	if (!ji)
+		return FALSE;
+
+	method = mono_jit_info_get_method (ji);
+
+	return mono_runtime_is_critical_method (method) || sgen_is_critical_method (method);
+}
+
+gboolean
+mono_gc_is_critical_method (MonoMethod *method)
+{
+	return sgen_is_critical_method (method);
 }
 
 #ifndef DISABLE_JIT
@@ -732,18 +771,6 @@ mono_gc_ephemeron_array_add (MonoObject *obj)
  * Appdomain handling
  */
 
-void
-mono_gc_set_current_thread_appdomain (MonoDomain *domain)
-{
-	SgenThreadInfo *info = mono_thread_info_current ();
-
-	/* Could be called from sgen_thread_unregister () with a NULL info */
-	if (domain) {
-		g_assert (info);
-		info->client_info.stopped_domain = domain;
-	}
-}
-
 static gboolean
 need_remove_object_for_domain (GCObject *start, MonoDomain *domain)
 {
@@ -1039,7 +1066,7 @@ static gboolean use_managed_allocator = TRUE;
 static MonoMethod*
 create_allocator (int atype, ManagedAllocatorVariant variant)
 {
-	int p_var, size_var, thread_var G_GNUC_UNUSED;
+	int p_var, size_var, real_size_var, thread_var G_GNUC_UNUSED;
 	gboolean slowpath = variant == MANAGED_ALLOCATOR_SLOW_PATH;
 	guint32 slowpath_branch, max_size_branch;
 	MonoMethodBuilder *mb;
@@ -1252,6 +1279,14 @@ create_allocator (int atype, ManagedAllocatorVariant variant)
 	mono_mb_emit_i4 (mb, MONO_MEMORY_BARRIER_NONE);
 #endif
 
+	if (nursery_canaries_enabled ()) {
+		real_size_var = mono_mb_add_local (mb, &mono_defaults.int_class->byval_arg);
+		mono_mb_emit_ldloc (mb, size_var);
+		mono_mb_emit_stloc(mb, real_size_var);
+	}
+	else
+		real_size_var = size_var;
+
 	/* size += ALLOC_ALIGN - 1; */
 	mono_mb_emit_ldloc (mb, size_var);
 	mono_mb_emit_icon (mb, SGEN_ALLOC_ALIGN - 1);
@@ -1290,6 +1325,11 @@ create_allocator (int atype, ManagedAllocatorVariant variant)
 	mono_mb_emit_ldloc (mb, size_var);
 	mono_mb_emit_byte (mb, CEE_CONV_I);
 	mono_mb_emit_byte (mb, CEE_ADD);
+
+	if (nursery_canaries_enabled ()) {
+			mono_mb_emit_icon (mb, CANARY_SIZE);
+			mono_mb_emit_byte (mb, CEE_ADD);
+	}
 	mono_mb_emit_stloc (mb, new_next_var);
 
 	/* if (G_LIKELY (new_next < tlab_temp_end)) */
@@ -1318,7 +1358,7 @@ create_allocator (int atype, ManagedAllocatorVariant variant)
 
 	/* FIXME: mono_gc_alloc_obj takes a 'size_t' as an argument, not an int32 */
 	mono_mb_emit_ldarg (mb, 0);
-	mono_mb_emit_ldloc (mb, size_var);
+	mono_mb_emit_ldloc (mb, real_size_var);
 	if (atype == ATYPE_NORMAL || atype == ATYPE_SMALL) {
 		mono_mb_emit_icall (mb, mono_gc_alloc_obj);
 	} else if (atype == ATYPE_VECTOR) {
@@ -1346,6 +1386,17 @@ create_allocator (int atype, ManagedAllocatorVariant variant)
 	mono_mb_emit_ldloc (mb, p_var);
 	mono_mb_emit_ldarg (mb, 0);
 	mono_mb_emit_byte (mb, CEE_STIND_I);
+
+	/* mark object end with nursery word */
+	if (nursery_canaries_enabled ()) {
+			mono_mb_emit_ldloc (mb, p_var);
+			mono_mb_emit_ldloc (mb, real_size_var);
+			mono_mb_emit_byte (mb, MONO_CEE_ADD);
+			mono_mb_emit_icon8 (mb, (mword) CANARY_STRING);
+			mono_mb_emit_icon (mb, CANARY_SIZE);
+			mono_mb_emit_byte (mb, MONO_CEE_PREFIX1);
+			mono_mb_emit_byte (mb, CEE_CPBLK);
+	}
 
 	if (atype == ATYPE_VECTOR) {
 		/* arr->max_length = max_length; */
@@ -2214,8 +2265,6 @@ sgen_client_thread_register (SgenThreadInfo* info, void *stack_bottom_fallback)
 #endif
 
 	info->client_info.skip = 0;
-	info->client_info.stopped_ip = NULL;
-	info->client_info.stopped_domain = NULL;
 
 	info->client_info.stack_start = NULL;
 
@@ -2284,12 +2333,6 @@ mono_gc_set_skip_thread (gboolean skip)
 	LOCK_GC;
 	info->client_info.gc_disabled = skip;
 	UNLOCK_GC;
-}
-
-static gboolean
-is_critical_method (MonoMethod *method)
-{
-	return mono_runtime_is_critical_method (method) || sgen_is_critical_method (method);
 }
 
 static gboolean
@@ -2846,8 +2889,8 @@ sgen_client_init (void)
 	cb.thread_detach = sgen_thread_detach;
 	cb.thread_unregister = sgen_thread_unregister;
 	cb.thread_attach = sgen_thread_attach;
-	cb.mono_method_is_critical = (gboolean (*)(void *))is_critical_method;
 	cb.mono_thread_in_critical_region = thread_in_critical_region;
+	cb.ip_in_critical_region = ip_in_critical_region;
 
 	mono_threads_init (&cb, sizeof (SgenThreadInfo));
 
@@ -2875,13 +2918,6 @@ sgen_client_init (void)
 		mono_tls_key_set_offset (TLS_KEY_SGEN_THREAD_INFO, tls_offset);
 	}
 #endif
-
-	/*
-	 * This needs to happen before any internal allocations because
-	 * it inits the small id which is required for hazard pointer
-	 * operations.
-	 */
-	sgen_os_init ();
 
 	mono_gc_register_thread (&dummy);
 }
@@ -2997,9 +3033,6 @@ mono_gc_base_init (void)
 #endif
 
 	sgen_gc_init ();
-
-	if (nursery_canaries_enabled ())
-		sgen_set_use_managed_allocator (FALSE);
 
 #if defined(HAVE_KW_THREAD)
 	/* This can happen with using libmonosgen.so */

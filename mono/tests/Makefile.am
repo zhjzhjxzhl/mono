@@ -50,6 +50,10 @@ if INSTALL_MOBILE_STATIC
 PROFILE_MCS_FLAGS = -d:MOBILE,MOBILE_STATIC,MOBILE_LEGACY 
 endif
 
+if INSTALL_AOT_HYBRID
+PROFILE_MCS_FLAGS = -d:MOBILE,MOBILE_LEGACY 
+endif
+
 MCS_NO_LIB = $(RUNTIME) $(mcs_topdir)/class/lib/build/mcs.exe -unsafe -debug \
 	-noconfig -nologo \
 	-nowarn:0162 -nowarn:0168 -nowarn:0219 -nowarn:0414 -nowarn:0618 \
@@ -84,69 +88,9 @@ STRESS_TESTS_SRC=	\
 	process-stress.cs	\
 	assembly-load-stress.cs
 
-BASE_TEST_MOBILE_STATIC_NOT_SUPPORTED= \
-	remoting4.cs		# Needs remoting support \
-	remoting1.cs		# Needs remoting support \
-	remoting2.cs		# Needs remoting support \
-	remoting3.cs		# Needs remoting support \
-	remoting5.cs		# Needs remoting support \
-	appdomain.cs        # Needs appdomain support \
-	appdomain-client.cs	# Needs appdomain support \
-	appdomain-unload.cs # Needs appdomain support \
-	appdomain-async-invoke.cs	# Needs appdomain support \
-	appdomain-thread-abort.cs	# Needs appdomain support \
-	appdomain1.cs		# Needs appdomain support \
-	appdomain2.cs		# Needs appdomain support \
-	appdomain-exit.cs	# Needs appdomain support \
-	assemblyresolve_event2.2.cs	# Needs appdomain support \
-	appdomain-unload-callback.cs	# Needs appdomain support \
-	appdomain-unload-doesnot-raise-pending-events.cs	# Needs appdomain support \
-	unload-appdomain-on-shutdown.cs # Needs appdomain support \
-	bug-47295.cs # Needs SRE \
-	loader.cs # Needs SRE \
-	pinvoke2.cs # Needs SRE \
-	generic-type-builder.2.cs	# Needs SRE \
-	dynamic-generic-size.cs	# Needs SRE \
-	cominterop.cs	# Needs COM \
-	dynamic-method-access.2.cs	# Need SRE \
-	dynamic-method-finalize.2.cs	# Need SRE \
-	dynamic-method-stack-traces.cs # Need SRE\
-	generic_type_definition.2.cs	# Need SRE \
-	bug-333798-tb.2.cs	# Need SRE \
-	bug-335131.2.cs	# Need SRE \
-	bug-322722_patch_bx.2.cs	# Need SRE\
-	bug-322722_dyn_method_throw.2.cs	# Need SRE \
-	bug-389886-2.cs	# Need SRE \
-	bug-349190.2.cs	# Need SRE \
-	bug-389886-sre-generic-interface-instances.cs	# Need SRE \
-	bug-462592.cs	# Need SRE \
-	bug-575941.cs	# Need SRE \
-	bug-389886-3.cs	# Need SRE \
-	constant-division.cs	# Need SRE \
-	dynamic-method-resurrection.cs	# Need SRE \
-	bug-80307.cs	# Need System.Web \
-	assembly_append_ordering.cs # Need SRE \
-	bug-544446.cs	# Needs AppDomains / TranparentProxy \
-	bug-36848.cs   # Needs AppDomains / TranparentProxy \
-	generic-marshalbyref.2.cs # Needs AppDomains \
-	stackframes-async.2.cs # Needs AppDomains \
-	transparentproxy.cs # Needs AppDomains / TranparentProxy \
-	bug-48015.cs # Needs AppDomains / TranparentProxy \
-	delegate9.cs # Needs AppDomains \
-	marshal-valuetypes.cs	# Needs AppDomains \
-	xdomain-threads.cs	# Needs AppDomains \
-	monitor.cs # Needs AppDomains \
-	generic-xdomain.2.cs # Needs AppDomains \
-	threadpool-exceptions7.cs # Needs AppDomains \
-	cross-domain.cs # Needs AppDomains \
-	generic-unloading.2.cs # Needs AppDomains \
-	namedmutex-destroy-race.cs # needs named Mutex \
-	thread6.cs # On MOBILE, ThreadAbortException doesn't have necessary field for this test
-
 # Disabled until ?mcs is fixed
 #	bug-331958.cs
-# Note: only add tests that are compatible with mobile_static to this category
-BASE_TEST_CS_SRC_UNIVERSAL=		\
+BASE_TEST_CS_SRC=		\
 	generic-unloading-sub.2.cs	\
 	create-instance.cs	\
 	bug-2907.cs		\
@@ -194,6 +138,7 @@ BASE_TEST_CS_SRC_UNIVERSAL=		\
 	typeof-ptr.cs		\
 	static-constructor.cs	\
 	pinvoke.cs		\
+	pinvoke-utf8.cs		\
 	pinvoke3.cs		\
 	pinvoke11.cs		\
 	pinvoke13.cs		\
@@ -420,6 +365,7 @@ BASE_TEST_CS_SRC_UNIVERSAL=		\
 	bug-81691.cs	\
 	bug-415577.cs	\
 	filter-stack.cs	\
+	vararg.cs	\
 	vararg2.cs	\
 	bug-461867.cs	\
 	bug-461941.cs	\
@@ -470,16 +416,68 @@ BASE_TEST_CS_SRC_UNIVERSAL=		\
 	bug-29585.cs	\
 	priority.cs	\
 	abort-cctor.cs	\
-	thread-native-exit.cs
-
-if INSTALL_MOBILE_STATIC
-BASE_TEST_CS_SRC= \
-	$(BASE_TEST_CS_SRC_UNIVERSAL)
-else
-BASE_TEST_CS_SRC= \
-	$(BASE_TEST_MOBILE_STATIC_NOT_SUPPORTED) \
-	$(BASE_TEST_CS_SRC_UNIVERSAL)
-endif
+	thread-native-exit.cs \
+	reference-loader.cs \
+	thread-suspend-suspended.cs \
+	thread-suspend-selfsuspended.cs \
+	remoting4.cs	\
+	remoting1.cs	\
+	remoting2.cs	\
+	remoting3.cs	\
+	remoting5.cs	\
+	appdomain.cs	\
+	appdomain-client.cs	\
+	appdomain-unload.cs	\
+	appdomain-async-invoke.cs	\
+	appdomain-thread-abort.cs	\
+	appdomain1.cs	\
+	appdomain2.cs	\
+	appdomain-exit.cs	\
+	assemblyresolve_event2.2.cs	\
+	appdomain-unload-callback.cs	\
+	appdomain-unload-doesnot-raise-pending-events.cs	\
+	unload-appdomain-on-shutdown.cs	\
+	bug-47295.cs	\
+	loader.cs	\
+	pinvoke2.cs	\
+	generic-type-builder.2.cs	\
+	dynamic-generic-size.cs	\
+	cominterop.cs	\
+	dynamic-method-access.2.cs	\
+	dynamic-method-finalize.2.cs	\
+	dynamic-method-stack-traces.cs	\
+	generic_type_definition.2.cs	\
+	bug-333798-tb.2.cs	\
+	bug-335131.2.cs	\
+	bug-322722_patch_bx.2.cs	\
+	bug-322722_dyn_method_throw.2.cs	\
+	bug-389886-2.cs	\
+	bug-349190.2.cs	\
+	bug-389886-sre-generic-interface-instances.cs	\
+	bug-462592.cs	\
+	bug-575941.cs	\
+	bug-389886-3.cs	\
+	constant-division.cs	\
+	dynamic-method-resurrection.cs	\
+	bug-80307.cs	\
+	assembly_append_ordering.cs	\
+	bug-544446.cs	\
+	bug-36848.cs	\
+	generic-marshalbyref.2.cs	\
+	stackframes-async.2.cs	\
+	transparentproxy.cs	\
+	bug-48015.cs	\
+	delegate9.cs	\
+	marshal-valuetypes.cs	\
+	xdomain-threads.cs	\
+	monitor.cs	\
+	generic-xdomain.2.cs	\
+	threadpool-exceptions7.cs	\
+	cross-domain.cs	\
+	generic-unloading.2.cs	\
+	namedmutex-destroy-race.cs	\
+	thread6.cs	\
+	appdomain-threadpool-unload.cs
 
 TEST_CS_SRC_DIST=	\
 	$(BASE_TEST_CS_SRC)	\
@@ -494,8 +492,6 @@ TEST_CS_SRC_GEN = \
 
 if AMD64
 TEST_CS_SRC = $(BASE_TEST_CS_SRC) $(TEST_CS_SRC_GEN) async-exc-compilation.cs finally_guard.cs finally_block_ending_in_dead_bb.cs
-# #651684
-PLATFORM_DISABLED_TESTS = finally_guard.exe
 else
 if X86
 TEST_CS_SRC = $(BASE_TEST_CS_SRC) $(TEST_CS_SRC_GEN) async-exc-compilation.cs finally_guard.cs finally_block_ending_in_dead_bb.cs
@@ -506,6 +502,83 @@ endif
 
 if IA64
 TEST_CS_SRC+=async-exc-compilation.cs filter-stack.cs
+endif
+
+TEST_IL_SRC=			\
+	field-access.il		\
+	method-access.il	\
+	ldftn-access.il		\
+	cpblkTest.il		\
+	vbinterface.il		\
+	calliTest.il		\
+	calliGenericTest.il		\
+	ckfiniteTest.il		\
+	fault-handler.il		\
+	locallocTest.il		\
+	initblkTest.il		\
+	qt-instance.il		\
+	vararg.il		\
+	bug-29859.il		\
+	bug-78549.il		\
+	static-fields-nonconst.il	\
+	reload-at-bb-end.il	\
+	test-enum-indstoreil.il	\
+	filter-bug.il		\
+	even-odd.il		\
+	bug-82022.il	\
+	vt-sync-method.il	\
+	enum_types.il	\
+	invalid-token.il	\
+	call_missing_method.il	\
+	call_missing_class.il	\
+	ldfld_missing_field.il	\
+	ldfld_missing_class.il	\
+	find-method.2.il	\
+	bug-79215.2.il	\
+	bug-79956.2.il	\
+	bug-327438.2.il \
+	bug-387274.2.il	\
+	bug-426309.2.il	\
+	ldtoken_with_byref_typespec.2.il \
+	resolve_method_bug.2.il \
+	resolve_field_bug.2.il \
+	resolve_type_bug.2.il	\
+	generics-sharing-other-exc.2.il	\
+	generic-ldobj.2.il	\
+	generic-mkrefany.2.il	\
+	generic-refanyval.2.il	\
+	generic-ldtoken.2.il	\
+	generic-ldtoken-method.2.il	\
+	generic-ldtoken-field.2.il	\
+	generic-tailcall.2.il	\
+	generic-tailcall2.2.il	\
+	generic-array-exc.2.il	\
+	generic-valuetype-newobj2.2.il	\
+	generic-valuetype-newobj.2.il	\
+	generic-constrained.2.il	\
+	generic-type-load-exception.2.il	\
+	bug-81466.il	\
+	bug457574.il	\
+	bug445361.il	\
+	bug-463303.il	\
+	bug469742.2.il	\
+	bug-528055.il	\
+	array_load_exception.il \
+	bug-481403.il	\
+	interface-with-static-method.il	\
+	bug-633291.il	\
+	delegate-with-null-target.il	\
+	bug-318677.il	\
+	gsharing-valuetype-layout.il	\
+	invalid_generic_instantiation.il \
+	bug-45841-fpstack-exceptions.il
+
+if AMD64
+# #651684
+PLATFORM_DISABLED_TESTS = finally_guard.exe
+endif
+
+if IA64
 # bug #319249
 PLATFORM_DISABLED_TESTS=exception17.exe
 PLATFORM_DISABLED_TESTS+=winx64structs.exe
@@ -527,7 +600,11 @@ endif
 
 if POWERPC64
 # FIXME: These tests hang/fail for unknown reasons
-PLATFORM_DISABLED_TESTS=monitor.exe threadpool-exceptions5.exe
+PLATFORM_DISABLED_TESTS=monitor.exe threadpool-exceptions5.exe appdomain-thread-abort.exe appdomain-unload.exe \
+	pinvoke2.exe pinvoke3.exe pinvoke11.exe threadpool-exceptions7.exe winx64structs.exe bug-10127.exe pinvoke_ppcc.exe \
+	pinvoke_ppcs.exe pinvoke_ppci.exe pinvoke_ppcf.exe pinvoke_ppcd.exe abort-cctor.exe \
+	sgen-domain-unload-2.exe sgen-weakref-stress.exe sgen-cementing-stress.exe sgen-new-threads-dont-join-stw.exe \
+	sgen-new-threads-dont-join-stw-2.exe sgen-new-threads-collect.exe sgen-bridge.exe
 endif
 
 if ARM
@@ -634,10 +711,12 @@ else
 COOP_DISABLED_TESTS= 
 endif
 
+PROFILE_DISABLED_TESTS=
+
 if INSTALL_MOBILE_STATIC
 # Tests which rely on TypeLoadExceptions
 # In full-aot mode, these cause the relevant methods to be not AOTed.
-PROFILE_DISABLED_TESTS = \
+PROFILE_DISABLED_TESTS += \
 	typeload-unaligned.exe \
 	field-access.exe \
 	invalid_generic_instantiation.exe \
@@ -676,30 +755,101 @@ PROFILE_DISABLED_TESTS += \
 # in the mobile_static profile
 PROFILE_DISABLED_TESTS += \
 	assembly-load-remap.exe
-else
-PROFILE_DISABLED_TESTS=
+
+# Test which needs remoting support
+PROFILE_DISABLED_TESTS += \
+	remoting4.exe	\
+	remoting1.exe	\
+	remoting2.exe	\
+	remoting3.exe	\
+	remoting5.exe
+
+# Tests which needs AppDomain support
+PROFILE_DISABLED_TESTS += \
+	appdomain.exe	\
+	appdomain-client.exe	\
+	appdomain-unload.exe	\
+	appdomain-async-invoke.exe	\
+	appdomain-thread-abort.exe	\
+	appdomain1.exe	\
+	appdomain2.exe	\
+	appdomain-exit.exe	\
+	appdomain-unload-callback.exe	\
+	appdomain-unload-doesnot-raise-pending-events.exe	\
+	unload-appdomain-on-shutdown.exe	\
+	assemblyresolve_event2.2.exe	\
+	bug-544446.exe	\
+	bug-36848.exe	\
+	generic-marshalbyref.2.exe	\
+	stackframes-async.2.exe	\
+	transparentproxy.exe	\
+	bug-48015.exe	\
+	delegate9.exe	\
+	marshal-valuetypes.exe	\
+	xdomain-threads.exe	\
+	monitor.exe	\
+	generic-xdomain.2.exe	\
+	threadpool-exceptions7.exe	\
+	cross-domain.exe	\
+	generic-unloading.2.exe	\
+	appdomain-threadpool-unload.exe
+
+# Tests which needs System.Reflection.Emit support
+PROFILE_DISABLED_TESTS += \
+	bug-47295.exe	\
+	loader.exe	\
+	pinvoke2.exe	\
+	generic-type-builder.2.exe	\
+	dynamic-generic-size.exe	\
+	cominterop.exe	\
+	dynamic-method-access.2.exe	\
+	dynamic-method-finalize.2.exe	\
+	dynamic-method-stack-traces.exe	\
+	generic_type_definition.2.exe	\
+	bug-333798-tb.2.exe	\
+	bug-335131.2.exe	\
+	bug-322722_patch_bx.2.exe	\
+	bug-322722_dyn_method_throw.2.exe	\
+	bug-389886-2.exe	\
+	bug-349190.2.exe	\
+	bug-389886-sre-generic-interface-instances.exe	\
+	bug-462592.exe	\
+	bug-575941.exe	\
+	bug-389886-3.exe	\
+	constant-division.exe	\
+	dynamic-method-resurrection.exe	\
+	assembly_append_ordering.exe
+
+# Test which needs System.Web support
+PROFILE_DISABLED_TESTS += \
+	bug-80307.exe
+
+# Tests which needs named Mutex support
+PROFILE_DISABLED_TESTS += \
+	namedmutex-destroy-race.exe
+
+# ThreadAbortException doesn't have necessary field for this test
+PROFILE_DISABLED_TESTS += \
+	thread6.exe
+
+# constraints-load.il: 
+# Failed to load method 0x6000007 from '..../mono/tests/constraints-load.exe' due to 
+# Could not resolve type with token 01000002 assembly:mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089 type:System.BrokenIComparable`1 member:<none>.
+PROFILE_DISABLED_TESTS += \
+	constraints-load.exe \
+	bug-515884.exe
 endif
 
-# The two finalizer tests only work under sgen
-# gc-altstack.exe fails under boehm because it has no support for altstack
-# bug-459094.exe creates an extremely deep directory tree
-# delegate-invoke.exe depends on 929c6bc9b6d76a273f251e6f5dfacac36e9c38bd which was
-# reverted.
-# bug-Xamarin-5278.exe got broken by 5d26590e79da139a284459299aee95c25f4cd835
-DISABLED_TESTS=			\
-	delegate-async-exception.exe	\
-	bug-348522.2.exe	\
-	bug-459094.exe \
-	delegate-invoke.exe \
-	bug-Xamarin-5278.exe \
-	$(PLATFORM_DISABLED_TESTS) \
-	$(EXTRA_DISABLED_TESTS) \
-	$(COOP_DISABLED_TESTS) \
-	$(PROFILE_DISABLED_TESTS)
+if INSTALL_AOT_HYBRID
+PROFILE_DISABLED_TESTS += \
+	bug-80307.exe \
+	namedmutex-destroy-race.exe
+endif
 
-DISABLED_TESTS_WRENCH=	\
-	$(DISABLED_TESTS)	\
-	$(PLATFORM_DISABLED_TESTS_WRENCH)	\
+AOT_DISABLED_TESTS= \
+	constraints-load.exe
+
+CI_DISABLED_TESTS = \
 	main-returns-background-resetabort.exe \
 	main-returns-background-abort-resetabort.exe	\
 	thread6.exe	\
@@ -709,112 +859,63 @@ DISABLED_TESTS_WRENCH=	\
 	gc-altstack.exe \
 	generic-xdomain.2.exe
 
-AOT_DISABLED_TESTS=constraints-load.exe
+# failing tests which we temporarily disable for PRs
+# so they don't interfere with other people's work
+CI_PR_DISABLED_TESTS = \
+	appdomain-threadpool-unload.exe	\
+	appdomain-thread-abort.exe
 
-# These only compile with MS CSC
-TEST_CSC_SRC=			\
-	vararg.cs
+# appdomain-threadpool-unload.exe creates 100 appdomains, takes too long with llvm
+LLVM_DISABLED_TESTS = \
+	appdomain-threadpool-unload.exe
 
-# constraints-load.il: 
-# Failed to load method 0x6000007 from '..../mono/tests/constraints-load.exe' due to 
-# Could not resolve type with token 01000002 assembly:mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089 type:System.BrokenIComparable`1 member:<none>.
-IL_SRC_MOBILE_STATIC_NOT_SUPPORTED=	\
-	constraints-load.il \
-	bug-515884.il
+LLVM = $(filter --llvm, $(MONO_ENV_OPTIONS))
 
-TEST_IL_SRC_UNIVERSAL=			\
-	field-access.il		\
-	method-access.il	\
-	ldftn-access.il		\
-	cpblkTest.il		\
-	vbinterface.il		\
-	calliTest.il		\
-	calliGenericTest.il		\
-	ckfiniteTest.il		\
-	fault-handler.il		\
-	locallocTest.il		\
-	initblkTest.il		\
-	qt-instance.il		\
-	vararg.il		\
-	bug-29859.il		\
-	bug-78549.il		\
-	static-fields-nonconst.il	\
-	reload-at-bb-end.il	\
-	test-enum-indstoreil.il	\
-	filter-bug.il		\
-	even-odd.il		\
-	bug-82022.il	\
-	vt-sync-method.il	\
-	enum_types.il	\
-	invalid-token.il	\
-	call_missing_method.il	\
-	call_missing_class.il	\
-	ldfld_missing_field.il	\
-	ldfld_missing_class.il	\
-	find-method.2.il	\
-	bug-79215.2.il	\
-	bug-79956.2.il	\
-	bug-327438.2.il \
-	bug-387274.2.il	\
-	bug-426309.2.il	\
-	ldtoken_with_byref_typespec.2.il \
-	resolve_method_bug.2.il \
-	resolve_field_bug.2.il \
-	resolve_type_bug.2.il	\
-	generics-sharing-other-exc.2.il	\
-	generic-ldobj.2.il	\
-	generic-mkrefany.2.il	\
-	generic-refanyval.2.il	\
-	generic-ldtoken.2.il	\
-	generic-ldtoken-method.2.il	\
-	generic-ldtoken-field.2.il	\
-	generic-tailcall.2.il	\
-	generic-tailcall2.2.il	\
-	generic-array-exc.2.il	\
-	generic-valuetype-newobj2.2.il	\
-	generic-valuetype-newobj.2.il	\
-	generic-constrained.2.il	\
-	generic-type-load-exception.2.il	\
-	bug-81466.il	\
-	bug457574.il	\
-	bug445361.il	\
-	bug-463303.il	\
-	bug469742.2.il	\
-	bug-528055.il	\
-	array_load_exception.il \
-	bug-481403.il	\
-	interface-with-static-method.il	\
-	bug-633291.il	\
-	delegate-with-null-target.il	\
-	bug-318677.il	\
-	gsharing-valuetype-layout.il	\
-	invalid_generic_instantiation.il
-
-if INSTALL_MOBILE_STATIC
-TEST_IL_SRC= \
-	$(TEST_IL_SRC_UNIVERSAL)
-else
-TEST_IL_SRC= \
-	$(TEST_IL_SRC_MOBILE_STATIC_NOT_SUPPORTED) \
-	$(TEST_IL_SRC_UNIVERSAL)
-endif
+# The two finalizer tests only work under sgen
+# gc-altstack.exe fails under boehm because it has no support for altstack
+# bug-459094.exe creates an extremely deep directory tree
+# delegate-invoke.exe depends on 929c6bc9b6d76a273f251e6f5dfacac36e9c38bd which was
+# reverted.
+# bug-Xamarin-5278.exe got broken by 5d26590e79da139a284459299aee95c25f4cd835
+# bug-45841-fpstack-exceptions.exe: https://bugzilla.xamarin.com/show_bug.cgi?id=47053
+# appdomain-thread-abort.exe: https://bugzilla.xamarin.com/show_bug.cgi?id=47054
+DISABLED_TESTS=			\
+	delegate-async-exception.exe	\
+	bug-348522.2.exe	\
+	bug-459094.exe \
+	delegate-invoke.exe \
+	bug-Xamarin-5278.exe \
+	bug-45841-fpstack-exceptions.exe \
+	appdomain-thread-abort.exe \
+	$(PLATFORM_DISABLED_TESTS) \
+	$(EXTRA_DISABLED_TESTS) \
+	$(COOP_DISABLED_TESTS) \
+	$(PROFILE_DISABLED_TESTS) \
+	$(if $(AOT),$(AOT_DISABLED_TESTS)) \
+	$(if $(CI),$(CI_DISABLED_TESTS)) \
+	$(if $(CI_PR),$CI_PR_DISABLED_TESTS) \
+	$(if $(LLVM),$(LLVM_DISABLED_TESTS))
 
 # pre-requisite test sources: files that are not test themselves
 # but that need to be compiled
 PREREQ_IL_SRC=event-il.il module-cctor.il
 PREREQ_CS_SRC=
-PREREQ_IL_DLL_SRC=event-il.il module-cctor.il
-PREREQ_CS_DLL_SRC=
+PREREQ_IL_DLL_SRC=
+PREREQ_CS_DLL_SRC=TestingReferenceAssembly.cs TestingReferenceReferenceAssembly.cs
 
-PREREQSI_IL=$(PREREQ_IL_SRC:.il=.exe)
-PREREQSI_CS=$(PREREQ_CS_SRC:.cs=.exe)
-TESTSI_CS=$(TEST_CS_SRC:.cs=.exe)
-TESTSI_IL=$(TEST_IL_SRC:.il=.exe)
-TESTBS=$(BENCHSRC:.cs=.exe)
-STRESS_TESTS=$(STRESS_TESTS_SRC:.cs=.exe)
+PREREQSI_IL=$(PREREQ_IL_SRC:.il=.exe) \
+	$(PREREQ_IL_DLL_SRC:.il=.dll)
+PREREQSI_CS=$(PREREQ_CS_SRC:.cs=.exe) \
+	$(PREREQ_CS_DLL_SRC:.cs=.dll)
+TESTSI_CS=$(filter-out $(DISABLED_TESTS),$(TEST_CS_SRC:.cs=.exe))
+TESTSI_IL=$(filter-out $(DISABLED_TESTS),$(TEST_IL_SRC:.il=.exe))
+TESTBS=$(filter-out $(DISABLED_TESTS),$(BENCHSRC:.cs=.exe))
+STRESS_TESTS=$(filter-out $(DISABLED_TESTS),$(STRESS_TESTS_SRC:.cs=.exe))
 
-PREREQSI_IL_AOT=$(PREREQ_IL_SRC:.il=.exe$(PLATFORM_AOT_SUFFIX))
-PREREQSI_CS_AOT=$(PREREQ_CS_SRC:.cs=.exe$(PLATFORM_AOT_SUFFIX))
+PREREQSI_IL_AOT=$(PREREQ_IL_SRC:.il=.exe$(PLATFORM_AOT_SUFFIX)) \
+		$(PREREQ_IL_DLL_SRC:.il=.dll$(PLATFORM_AOT_SUFFIX))
+PREREQSI_CS_AOT=$(PREREQ_CS_SRC:.cs=.exe$(PLATFORM_AOT_SUFFIX)) \
+		$(PREREQ_CS_DLL_SRC:.cs=.dll$(PLATFORM_AOT_SUFFIX))
 
 EXTRA_DIST=test-driver test-runner.cs $(TEST_CS_SRC_DIST) $(TEST_IL_SRC) \
 	$(BENCHSRC) $(STRESS_TESTS_SRC) stress-runner.pl $(PREREQ_IL_SRC) $(PREREQ_CS_SRC)
@@ -823,7 +924,9 @@ EXTRA_DIST=test-driver test-runner.cs $(TEST_CS_SRC_DIST) $(TEST_IL_SRC) \
 	$(ILASM) -out:$@ $<
 
 if !INSTALL_MOBILE_STATIC
+if !INSTALL_AOT_HYBRID
 TEST_DRIVER_HARD_KILL_FEATURE=-r:Mono.Posix.dll
+endif
 endif
 
 if INSTALL_MOBILE_STATIC
@@ -834,6 +937,12 @@ endif
 
 %.exe: %.cs $(TEST_DRIVER_DEPEND)
 	$(MCS) -r:System.dll -r:System.Xml.dll -r:System.Core.dll -r:TestDriver.dll $(TEST_DRIVER_HARD_KILL_FEATURE) -out:$@ $<
+
+%.dll: %.cs
+	$(MCS) -r:System.dll -target:library -out:$@ $<
+
+TestingReferenceReferenceAssembly.dll: TestingReferenceReferenceAssembly.cs TestingReferenceAssembly.dll
+	$(MCS) -r:TestingReferenceAssembly.dll -target:library -out:$@ $<
 
 %.exe$(PLATFORM_AOT_SUFFIX): %.exe 
 	$(RUNTIME) $(AOT_BUILD_FLAGS) $<
@@ -869,7 +978,9 @@ bug-324535-il.dll$(PLATFORM_AOT_SUFFIX)	\
 bug-36848-a.dll$(PLATFORM_AOT_SUFFIX)	\
 bug-81691-b.dll$(PLATFORM_AOT_SUFFIX)	\
 bug-327438.2.exe$(PLATFORM_AOT_SUFFIX)	\
-bug-81466-lib.dll$(PLATFORM_AOT_SUFFIX)
+bug-81466-lib.dll$(PLATFORM_AOT_SUFFIX)	\
+TestingReferenceAssembly.dll$(PLATFORM_AOT_SUFFIX)	\
+TestingReferenceReferenceAssembly.dll$(PLATFORM_AOT_SUFFIX)
 
 if INSTALL_MOBILE_STATIC
 prereqs: $(PREREQSI_IL_AOT) $(PREREQSI_CS_AOT) $(AOT_EXTRA_LIBS)
@@ -935,9 +1046,8 @@ test_cs: $(TEST_PROG) $(TESTSI_CS) libtest.la
 	@failed=0; \
 	passed=0; \
 	if [ "x$$V" = "x1" ]; then dump_action="dump-output"; else dump_action="no-dump"; fi; \
-	if [ "x$$CI" = "x1" ]; then disabled_tests="$(DISABLED_TESTS_WRENCH)"; else disabled_tests="$(DISABLED_TESTS)"; fi; \
 	for i in $(TESTSI_CS); do	\
-		if $(srcdir)/test-driver '$(with_mono_path) $(TEST_PROG_RUN)' $$i "$${disabled_tests}" "$${dump_action}" $(RUNTIME_ARGS); \
+		if $(srcdir)/test-driver '$(with_mono_path) $(TEST_PROG_RUN)' $$i "$(DISABLED_TESTS)" "$${dump_action}" $(RUNTIME_ARGS); \
 		then \
 			passed=`expr $${passed} + 1`; \
 		else \
@@ -951,9 +1061,8 @@ test_il: $(TEST_PROG) $(TESTSI_IL) libtest.la
 	@failed=0; \
 	passed=0; \
 	if [ "x$$V" = "x1" ]; then dump_action="dump-output"; else dump_action="no-dump"; fi; \
-	if [ "x$$CI" = "x1" ]; then disabled_tests="$(DISABLED_TESTS_WRENCH)"; else disabled_tests="$(DISABLED_TESTS)"; fi; \
 	for i in $(TESTSI_IL); do	\
-		if $(srcdir)/test-driver '$(with_mono_path) $(TEST_PROG_RUN)' $$i "$${disabled_tests}" "$${dump_action}" $(RUNTIME_ARGS); \
+		if $(srcdir)/test-driver '$(with_mono_path) $(TEST_PROG_RUN)' $$i "$(DISABLED_TESTS)" "$${dump_action}" $(RUNTIME_ARGS); \
 		then \
 			passed=`expr $${passed} + 1`; \
 		else \
@@ -965,9 +1074,8 @@ test_il: $(TEST_PROG) $(TESTSI_IL) libtest.la
 
 testb: $(TEST_PROG) $(TESTBS)
 	if [ "x$$V" = "x1" ]; then dump_action="dump-output"; else dump_action="no-dump"; fi; \
-	if [ "x$$CI" = "x1" ]; then disabled_tests="$(DISABLED_TESTS_WRENCH)"; else disabled_tests="$(DISABLED_TESTS)"; fi; \
 	for i in $(TESTBS); do	\
-		$(srcdir)/test-driver '$(with_mono_path) $(TEST_PROG_RUN)' $$i "$${disabled_tests}" "$${dump_action}" $(RUNTIME_ARGS);	\
+		$(srcdir)/test-driver '$(with_mono_path) $(TEST_PROG_RUN)' $$i "$(DISABLED_TESTS)" "$${dump_action}" $(RUNTIME_ARGS);	\
 	done
 
 runtest: $(TESTSI_CS) $(TESTSI_IL) $(TESTBS) libtest.la $(PREREQSI_IL) $(PREREQSI_CS)
@@ -975,13 +1083,12 @@ runtest: $(TESTSI_CS) $(TESTSI_IL) $(TESTBS) libtest.la $(PREREQSI_IL) $(PREREQS
 	passed=0; \
 	failed_tests="";\
 	if [ "x$$V" = "x1" ]; then dump_action="dump-output"; else dump_action="no-dump"; fi; \
-	if [ "x$$CI" = "x1" ]; then disabled_tests="$(DISABLED_TESTS_WRENCH)"; else disabled_tests="$(DISABLED_TESTS)"; fi; \
 	rm -f testlist testlist.sorted; \
 	for i in $(TESTSI_CS) $(TESTBS) $(TESTSI_IL); do echo $${i} >> testlist; sort testlist > testlist.sorted; done; \
 	for i in `cat testlist.sorted`; do \
 		rm -f $${i}.so; \
-		if [ x$(AOT) = x1 ]; then if echo $(AOT_DISABLED_TESTS) | grep -v -q $${i}; then $(with_mono_path) $(JITTEST_PROG_RUN) --aot --debug $${i} > $${i}.aotlog 2>&1 || exit 1; fi; fi; \
-		if $(srcdir)/test-driver '$(with_mono_path) $(JITTEST_PROG_RUN)' $$i "$${disabled_tests}" "$${dump_action}" $(RUNTIME_ARGS); \
+		$(with_mono_path) $(JITTEST_PROG_RUN) --aot --debug $${i} > $${i}.aotlog 2>&1 || exit 1; \
+		if $(srcdir)/test-driver '$(with_mono_path) $(JITTEST_PROG_RUN)' $$i "$(DISABLED_TESTS)" "$${dump_action}" $(RUNTIME_ARGS); \
 		then \
 			passed=`expr $${passed} + 1`; \
 		else \
@@ -1005,12 +1112,10 @@ runtest: $(TESTSI_CS) $(TESTSI_IL) $(TESTBS) libtest.la $(PREREQSI_IL) $(PREREQS
 	fi
 
 runtest-managed: test-runner.exe $(TESTSI_CS) $(TESTSI_IL) $(TESTBS) libtest.la $(PREREQSI_IL) $(PREREQSI_CS)
-	@if [ "x$$CI" = "x1" ]; then disabled_tests="$(DISABLED_TESTS_WRENCH)"; else disabled_tests="$(DISABLED_TESTS)"; fi; \
-	$(RUNTIME) --debug $(TEST_RUNNER) $(TEST_RUNNER_ARGS) -j a --testsuite-name "runtime" --timeout 300 --disabled "$${disabled_tests}" $(TESTSI_CS) $(TESTBS) $(TESTSI_IL)
+	$(RUNTIME) --debug $(TEST_RUNNER) $(TEST_RUNNER_ARGS) -j a --testsuite-name "runtime" --timeout 300 --disabled "$(DISABLED_TESTS)" $(TESTSI_CS) $(TESTBS) $(TESTSI_IL)
 
 runtest-managed-serial: test-runner.exe $(TESTSI_CS) $(TESTSI_IL) $(TESTBS) libtest.la $(PREREQSI_IL) $(PREREQSI_CS)
-	@if [ "x$$CI" = "x1" ]; then disabled_tests="$(DISABLED_TESTS_WRENCH)"; else disabled_tests="$(DISABLED_TESTS)"; fi; \
-	$(RUNTIME) --debug $(TEST_RUNNER) $(TEST_RUNNER_ARGS) -j 1 --testsuite-name "runtime" --disabled "$${disabled_tests}" $(TESTSI_CS) $(TESTBS) $(TESTSI_IL)
+	$(RUNTIME) --debug $(TEST_RUNNER) $(TEST_RUNNER_ARGS) -j 1 --testsuite-name "runtime" --disabled "$(DISABLED_TESTS)" $(TESTSI_CS) $(TESTBS) $(TESTSI_IL)
 
 testjit:
 	@if test x$(M) != x0; then $(MAKE) runtest-managed; else $(MAKE) runtest; fi
@@ -1061,12 +1166,14 @@ testbundle: console.exe
 
 EXTRA_DIST += load-missing.il t-missing.cs load-exceptions.cs
 test-type-load: $(TEST_DRIVER_DEPEND)
+if !POWERPC64
 	@$(ILASM) /dll /output:load-missing.dll $(srcdir)/load-missing.il > /dev/null
 	@$(MCS) -t:library -out:t.dll -d:FOUND $(srcdir)/t-missing.cs
 	@$(MCS) -r:TestDriver.dll -r:load-missing.dll -r:t.dll -out:load-exceptions.exe $(srcdir)/load-exceptions.cs
 	@$(MCS) -t:library -out:t.dll $(srcdir)/t-missing.cs
 	@echo "Testing load-exception.exe..."
 	@$(RUNTIME) load-exceptions.exe > load-exceptions.exe.stdout 2> load-exceptions.exe.stderr
+endif
 
 EXTRA_DIST += test-multi-netmodule-1-netmodule.cs test-multi-netmodule-2-dll1.cs test-multi-netmodule-3-dll2.cs test-multi-netmodule-4-exe.cs
 test-multi-netmodule:
@@ -1100,7 +1207,7 @@ debug-casts:
 	@$(MCS) -r:TestDriver.dll $(srcdir)/debug-casts.cs
 	@$(RUNTIME) --debug=casts debug-casts.exe
 
-EXTRA_DIST += sgen-bridge.cs sgen-descriptors.cs sgen-gshared-vtype.cs sgen-bridge-major-fragmentation.cs sgen-domain-unload.cs sgen-weakref-stress.cs sgen-cementing-stress.cs sgen-case-23400.cs 	finalizer-wait.cs critical-finalizers.cs sgen-domain-unload-2.cs sgen-suspend.cs sgen-new-threads-dont-join-stw.cs sgen-new-threads-dont-join-stw-2.cs sgen-bridge-xref.cs bug-17590.cs sgen-toggleref.cs sgen-bridge-gchandle.cs
+EXTRA_DIST += sgen-bridge.cs sgen-descriptors.cs sgen-gshared-vtype.cs sgen-bridge-major-fragmentation.cs sgen-domain-unload.cs sgen-weakref-stress.cs sgen-cementing-stress.cs sgen-case-23400.cs 	finalizer-wait.cs critical-finalizers.cs sgen-domain-unload-2.cs sgen-suspend.cs sgen-new-threads-dont-join-stw.cs sgen-new-threads-dont-join-stw-2.cs sgen-new-threads-collect.cs sgen-bridge-xref.cs bug-17590.cs sgen-toggleref.cs sgen-bridge-gchandle.cs
 
 
 sgen-tests:
@@ -1111,58 +1218,58 @@ if !S390X
 	$(MAKE) sgen-bridge2-tests
 endif
 
-SGEN_REGULAR_TESTS_MOBILE_STATIC_NOT_SUPPORTED =	\
-	sgen-domain-unload.exe	\
-	sgen-domain-unload-2.exe
+SGEN_REGULAR_TESTS_SRC =	\
+	finalizer-wait.cs	\
+	critical-finalizers.cs	\
+	sgen-descriptors.cs	\
+	sgen-gshared-vtype.cs	\
+	sgen-weakref-stress.cs	\
+	sgen-cementing-stress.cs	\
+	sgen-case-23400.cs	\
+	sgen-new-threads-dont-join-stw.cs	\
+	sgen-new-threads-dont-join-stw-2.cs	\
+	sgen-new-threads-collect.cs	\
+	gc-graystack-stress.cs	\
+	bug-17590.cs	\
+	sgen-domain-unload.cs	\
+	sgen-domain-unload-2.cs
 
-SGEN_REGULAR_TESTS_UNIVERSAL =	\
-	finalizer-wait.exe	\
-	critical-finalizers.exe	\
-	sgen-descriptors.exe	\
-	sgen-gshared-vtype.exe	\
-	sgen-weakref-stress.exe	\
-	sgen-cementing-stress.exe	\
-	sgen-case-23400.exe	\
-	sgen-new-threads-dont-join-stw.exe	\
-	sgen-new-threads-dont-join-stw-2.exe	\
-	gc-graystack-stress.exe	\
-	bug-17590.exe
+SGEN_REGULAR_DISABLED_TESTS=
 
 if INSTALL_MOBILE_STATIC
-SGEN_REGULAR_TESTS= \
-	$(SGEN_REGULAR_TESTS_UNIVERSAL)
-else
-SGEN_REGULAR_TESTS= \
-	$(SGEN_REGULAR_TESTS_MOBILE_STATIC_NOT_SUPPORTED) \
-	$(SGEN_REGULAR_TESTS_UNIVERSAL)
+SGEN_REGULAR_DISABLED_TESTS += \
+	sgen-domain-unload.exe	\
+	sgen-domain-unload-2.exe
 endif
 
+SGEN_REGULAR_TESTS=$(filter-out $(SGEN_REGULAR_DISABLED_TESTS),$(SGEN_REGULAR_TESTS_SRC:.cs=.exe))
+
 sgen-regular-tests: $(SGEN_REGULAR_TESTS)
-	$(MAKE) sgen-regular-tests-plain
+	$(MAKE) sgen-regular-tests-ms
 	$(MAKE) sgen-regular-tests-ms-conc
 	$(MAKE) sgen-regular-tests-ms-conc-split
 	$(MAKE) sgen-regular-tests-ms-split
-	$(MAKE) sgen-regular-tests-ms-split-95
-	$(MAKE) sgen-regular-tests-plain-clear-at-gc
+	$(MAKE) sgen-regular-tests-ms-conc-split-95
+	$(MAKE) sgen-regular-tests-ms-clear-at-gc
 	$(MAKE) sgen-regular-tests-ms-conc-clear-at-gc
-	$(MAKE) sgen-regular-tests-ms-split-clear-at-gc
+	$(MAKE) sgen-regular-tests-ms-conc-split-clear-at-gc
 
-sgen-regular-tests-plain: $(SGEN_REGULAR_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_REGULAR_TESTS)
+sgen-regular-tests-ms: $(SGEN_REGULAR_TESTS) test-runner.exe
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="major=marksweep" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_REGULAR_TESTS)
 sgen-regular-tests-ms-conc: $(SGEN_REGULAR_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_REGULAR_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_REGULAR_TESTS)
 sgen-regular-tests-ms-conc-split: $(SGEN_REGULAR_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="major=marksweep-conc,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_REGULAR_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="major=marksweep-conc,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_REGULAR_TESTS)
 sgen-regular-tests-ms-split: $(SGEN_REGULAR_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_REGULAR_TESTS)
-sgen-regular-tests-ms-split-95: $(SGEN_REGULAR_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="minor=split,alloc-ratio=95" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_REGULAR_TESTS)
-sgen-regular-tests-plain-clear-at-gc: $(SGEN_REGULAR_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_REGULAR_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="major=marksweep,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_REGULAR_TESTS)
+sgen-regular-tests-ms-conc-split-95: $(SGEN_REGULAR_TESTS) test-runner.exe
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="major=marksweep-conc,minor=split,alloc-ratio=95" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_REGULAR_TESTS)
+sgen-regular-tests-ms-clear-at-gc: $(SGEN_REGULAR_TESTS) test-runner.exe
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="major=marksweep" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_REGULAR_TESTS)
 sgen-regular-tests-ms-conc-clear-at-gc: $(SGEN_REGULAR_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_REGULAR_TESTS)
-sgen-regular-tests-ms-split-clear-at-gc: $(SGEN_REGULAR_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_REGULAR_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_REGULAR_TESTS)
+sgen-regular-tests-ms-conc-split-clear-at-gc: $(SGEN_REGULAR_TESTS) test-runner.exe
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="major=marksweep-conc,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_REGULAR_TESTS)
 
 SGEN_TOGGLEREF_TESTS=	\
 	sgen-toggleref.exe
@@ -1178,21 +1285,21 @@ sgen-toggleref-tests: $(SGEN_TOGGLEREF_TESTS)
 	$(MAKE) sgen-toggleref-tests-ms-split-clear-at-gc
 
 sgen-toggleref-tests-plain: $(SGEN_TOGGLEREF_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="toggleref-test" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_TOGGLEREF_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="toggleref-test" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_TOGGLEREF_TESTS)
 sgen-toggleref-tests-ms-conc: $(SGEN_TOGGLEREF_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="toggleref-test,major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_TOGGLEREF_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="toggleref-test,major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_TOGGLEREF_TESTS)
 sgen-toggleref-tests-ms-conc-split: $(SGEN_TOGGLEREF_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="toggleref-test,major=marksweep-conc,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_TOGGLEREF_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="toggleref-test,major=marksweep-conc,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_TOGGLEREF_TESTS)
 sgen-toggleref-tests-ms-split: $(SGEN_TOGGLEREF_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="toggleref-test,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_TOGGLEREF_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="toggleref-test,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_TOGGLEREF_TESTS)
 sgen-toggleref-tests-ms-split-95: $(SGEN_TOGGLEREF_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="toggleref-test,minor=split,alloc-ratio=95" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_TOGGLEREF_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="" MONO_GC_PARAMS="toggleref-test,minor=split,alloc-ratio=95" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_TOGGLEREF_TESTS)
 sgen-toggleref-tests-plain-clear-at-gc: $(SGEN_TOGGLEREF_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="toggleref-test" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_TOGGLEREF_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="toggleref-test" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_TOGGLEREF_TESTS)
 sgen-toggleref-tests-ms-conc-clear-at-gc: $(SGEN_TOGGLEREF_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="toggleref-test,major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_TOGGLEREF_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="toggleref-test,major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_TOGGLEREF_TESTS)
 sgen-toggleref-tests-ms-split-clear-at-gc: $(SGEN_TOGGLEREF_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="toggleref-test,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_TOGGLEREF_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="clear-at-gc" MONO_GC_PARAMS="toggleref-test,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_TOGGLEREF_TESTS)
 
 SGEN_BRIDGE_TESTS=	\
 	sgen-bridge.exe	\
@@ -1209,21 +1316,21 @@ sgen-bridge-tests: $(SGEN_BRIDGE_TESTS)
 	$(MAKE) sgen-bridge-tests-ms-split-tarjan-bridge
 
 sgen-bridge-tests-plain: $(SGEN_BRIDGE_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE_TESTS)
 sgen-bridge-tests-ms-conc: $(SGEN_BRIDGE_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE_TESTS)
 sgen-bridge-tests-ms-split: $(SGEN_BRIDGE_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE_TESTS)
 sgen-bridge-tests-plain-new-bridge: $(SGEN_BRIDGE_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="bridge-implementation=new" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="bridge-implementation=new" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE_TESTS)
 sgen-bridge-tests-ms-conc-new-bridge: $(SGEN_BRIDGE_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="bridge-implementation=new,major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="bridge-implementation=new,major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE_TESTS)
 sgen-bridge-tests-ms-split-new-bridge: $(SGEN_BRIDGE_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="bridge-implementation=new,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="bridge-implementation=new,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE_TESTS)
 sgen-bridge-tests-plain-tarjan-bridge: $(SGEN_BRIDGE_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="bridge-implementation=tarjan" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="bridge-implementation=tarjan" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE_TESTS)
 sgen-bridge-tests-ms-split-tarjan-bridge: $(SGEN_BRIDGE_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="bridge-implementation=tarjan,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=Bridge" MONO_GC_PARAMS="bridge-implementation=tarjan,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE_TESTS)
 
 SGEN_BRIDGE2_TESTS=	\
 	sgen-bridge-xref.exe
@@ -1239,21 +1346,21 @@ sgen-bridge2-tests: $(SGEN_BRIDGE2_TESTS)
 	$(MAKE) sgen-bridge2-tests-ms-split-tarjan-bridge
 
 sgen-bridge2-tests-plain: $(SGEN_BRIDGE2_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE2_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE2_TESTS)
 sgen-bridge2-tests-ms-conc: $(SGEN_BRIDGE2_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE2_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE2_TESTS)
 sgen-bridge2-tests-ms-split: $(SGEN_BRIDGE2_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE2_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE2_TESTS)
 sgen-bridge2-tests-plain-new-bridge: $(SGEN_BRIDGE2_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="bridge-implementation=new" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE2_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="bridge-implementation=new" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE2_TESTS)
 sgen-bridge2-tests-ms-conc-new-bridge: $(SGEN_BRIDGE2_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="bridge-implementation=new,major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE2_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="bridge-implementation=new,major=marksweep-conc" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE2_TESTS)
 sgen-bridge2-tests-ms-split-new-bridge: $(SGEN_BRIDGE2_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="bridge-implementation=new,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE2_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="bridge-implementation=new,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE2_TESTS)
 sgen-bridge2-tests-plain-tarjan-bridge: $(SGEN_BRIDGE2_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="bridge-implementation=tarjan" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE2_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="bridge-implementation=tarjan" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE2_TESTS)
 sgen-bridge2-tests-ms-split-tarjan-bridge: $(SGEN_BRIDGE2_TESTS) test-runner.exe
-	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="bridge-implementation=tarjan,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 900 $(SGEN_BRIDGE2_TESTS)
+	MONO_ENV_OPTIONS="--gc=sgen" MONO_GC_DEBUG="bridge=2Bridge" MONO_GC_PARAMS="bridge-implementation=tarjan,minor=split" $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 900 $(SGEN_BRIDGE2_TESTS)
 
 SGEN_BRIDGE3_TESTS=	\
 	sgen-bridge-gchandle.exe
@@ -1500,45 +1607,69 @@ gshared: test-generic-sharing
 gshared-aot:
 	@$(MAKE) AOT=1 gshared
 
-GSHARED_TESTS_MOBILE_STATIC_NOT_SUPPORTED = \
-		generic-type-builder.2.exe
+GSHARED_TESTS_SRC = \
+	generics-sharing.2.cs	\
+	shared-generic-methods.2.cs	\
+	shared-generic-synchronized.2.cs	\
+	generic-initobj.2.cs		\
+	generics-sharing-other-exc.2.cs	\
+	generic-box.2.cs		\
+	generic-unbox.2.cs	\
+	generic-delegate.2.cs	\
+	generic-sizeof.2.cs	\
+	generic-ldobj.2.cs	\
+	generic-mkrefany.2.cs			\
+	generic-refanyval.2.cs	\
+	generic-ldtoken.2.cs			\
+	generic-ldtoken-method.2.cs	\
+	generic-ldtoken-field.2.cs	\
+	generic-virtual.2.cs	\
+	generic-tailcall.2.cs			\
+	generic-interface-methods.2.cs	\
+	generic-array-type.2.cs	\
+	generic-method-patching.2.cs	\
+	generic-static-methods.2.cs	\
+	generic-null-call.2.cs	\
+	generic-tailcall2.2.cs			\
+	generic-array-exc.2.cs	\
+	generic-special.2.cs			\
+	generic-exceptions.2.cs	\
+	generic-delegate2.2.cs		\
+	generic-virtual2.2.cs	\
+	generic-valuetype-interface.2.cs	\
+	generic-valuetype-newobj.2.cs	\
+	generic-valuetype-newobj2.2.cs	\
+	generic-getgenericarguments.2.cs	\
+	generic-synchronized.2.cs	\
+	generic-delegate-ctor.2.cs		\
+	generic-constrained.2.cs	\
+	bug-431413.2.cs			\
+	generic-virtual-invoke.2.cs	\
+	generic-typedef.2.cs		\
+	generic-marshalbyref.2.cs	\
+	bug-459285.2.cs	\
+	bug-461198.2.cs	\
+	generic-sealed-virtual.2.cs	\
+	generic-system-arrays.2.cs	\
+	generic-stack-traces.2.cs	\
+	generic-stack-traces2.2.cs		\
+	bug-472600.2.cs	\
+	bug-473482.2.cs	\
+	bug-473999.2.cs		\
+	bug-479763.2.cs				\
+	generic-type-load-exception.2.cs	\
+	bug-616463.cs	\
+	bug-1147.cs	\
+	generic-type-builder.2.cs
 
-GSHARED_TESTS_UNIVERSAL = \
-		generics-sharing.2.exe shared-generic-methods.2.exe	\
-		shared-generic-synchronized.2.exe generic-initobj.2.exe		\
-		generics-sharing-other-exc.2.exe generic-box.2.exe		\
-		generic-unbox.2.exe generic-delegate.2.exe generic-sizeof.2.exe	\
-		generic-ldobj.2.exe generic-mkrefany.2.exe			\
-		generic-refanyval.2.exe generic-ldtoken.2.exe			\
-		generic-ldtoken-method.2.exe  generic-ldtoken-field.2.exe	\
-		generic-virtual.2.exe generic-tailcall.2.exe			\
-		generic-interface-methods.2.exe generic-array-type.2.exe	\
-		generic-method-patching.2.exe generic-static-methods.2.exe	\
-		generic-null-call.2.exe generic-tailcall2.2.exe			\
-		generic-array-exc.2.exe generic-special.2.exe			\
-		generic-exceptions.2.exe generic-delegate2.2.exe		\
-		generic-virtual2.2.exe generic-valuetype-interface.2.exe	\
-		generic-valuetype-newobj.2.exe generic-valuetype-newobj2.2.exe	\
-		generic-getgenericarguments.2.exe	\
-		generic-synchronized.2.exe generic-delegate-ctor.2.exe		\
-		generic-constrained.2.exe bug-431413.2.exe			\
-		generic-virtual-invoke.2.exe generic-typedef.2.exe		\
-		generic-marshalbyref.2.exe bug-459285.2.exe bug-461198.2.exe	\
-		generic-sealed-virtual.2.exe generic-system-arrays.2.exe	\
-		generic-stack-traces.2.exe generic-stack-traces2.2.exe		\
-		bug-472600.2.exe bug-473482.2.exe bug-473999.2.exe		\
-		bug-479763.2.exe				\
-		generic-type-load-exception.2.exe bug-616463.exe	\
-		bug-1147.exe
+GSHARED_DISABLED_TESTS=
 
 if INSTALL_MOBILE_STATIC
-GSHARED_TESTS= \
-	$(GSHARED_TESTS_UNIVERSAL)
-else
-GSHARED_TESTS= \
-	$(GSHARED_TESTS_MOBILE_STATIC_NOT_SUPPORTED) \
-	$(GSHARED_TESTS_UNIVERSAL)
+GSHARED_DISABLED_TESTS += \
+	generic-type-builder.2.exe
 endif
+
+GSHARED_TESTS=$(filter-out $(GSHARED_DISABLED_TESTS),$(GSHARED_TESTS_SRC:.cs=.exe))
 
 test-generic-sharing-normal: $(GSHARED_TESTS)
 	@for fn in $+ ; do	\
@@ -1551,7 +1682,7 @@ test-generic-sharing-normal: $(GSHARED_TESTS)
 	done
 
 test-generic-sharing-managed: test-runner.exe $(GSHARED_TESTS)
-	@$(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) -j a --testsuite-name "gshared" --disabled "$(DISABLED_TESTS)" --opt-sets "gshared gshared,shared gshared,-inline gshared,-inline,shared" $(GSHARED_TESTS)
+	$(Q) $(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) -j a --testsuite-name "gshared" --disabled "$(DISABLED_TESTS)" --opt-sets "gshared gshared,shared gshared,-inline gshared,-inline,shared" $(GSHARED_TESTS)
 
 if NACL_CODEGEN
 test-generic-sharing:
@@ -1659,7 +1790,7 @@ PROCESS_STRESS_TESTS=	\
 		process-leak.exe
 
 test-process-stress: $(PROCESS_STRESS_TESTS) test-runner.exe
-	$(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --timeout 600 $(PROCESS_STRESS_TESTS)
+	$(RUNTIME) $(TEST_RUNNER) $(TEST_RUNNER_ARGS) --testsuite-name $@ --disabled "$(DISABLED_TESTS)" --timeout 600 $(PROCESS_STRESS_TESTS)
 
 coreclr-gcstress:
 	$(MAKE) -C $(mono_build_root)/acceptance-tests coreclr-gcstress

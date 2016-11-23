@@ -48,6 +48,10 @@ if INSTALL_MONOTOUCH_TV
 build_profiles += monotouch_tv monotouch_tv_runtime
 endif
 
+if INSTALL_AOT_HYBRID
+build_profiles += aot_hybrid
+endif
+
 if INSTALL_MOBILE_STATIC
 build_profiles += mobile_static
 endif
@@ -165,10 +169,13 @@ CLEANFILES = etc/mono/config
 etc/mono/config: ../data/config Makefile $(symlinks)
 	d=`cd ../support && pwd`; \
 	sed 's,target="$$mono_libdir/libMonoPosixHelper$(libsuffix)",target="'$$d'/libMonoPosixHelper.la",' ../data/config > $@t
+	d=`cd ../mono/btls/build-shared && pwd`; \
+	sed 's,target="$$mono_libdir/libmono-btls-shared$(libsuffix)",target="'$$d'/libmono-btls-shared$(libsuffix)",' $@t > $@tt
 	if test -z "$(libgdiplus_loc)"; then :; else \
-	  sed 's,target="$(libgdiplus_install_loc)",target="$(libgdiplus_loc)",' $@t > $@tt; \
-	  mv -f $@tt $@t; fi
-	mv -f $@t $@
+	  sed 's,target="$(libgdiplus_install_loc)",target="$(libgdiplus_loc)",' $@tt > $@ttt; \
+	  mv -f $@ttt $@tt; fi
+	mv -f $@tt $@
+	rm -f $@t
 
 $(tmpinst)/bin/mono: mono-wrapper etc/mono/config
 	$(mkinstalldirs) $(tmpinst)/bin

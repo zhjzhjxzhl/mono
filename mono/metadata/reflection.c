@@ -46,6 +46,7 @@
 #include <mono/utils/mono-string.h>
 #include <mono/utils/mono-error-internals.h>
 #include <mono/utils/checked-build.h>
+#include <mono/utils/mono-counters.h>
 
 static void get_default_param_value_blobs (MonoMethod *method, char **blobs, guint32 *types);
 static MonoType* mono_reflection_get_type_with_rootimage (MonoImage *rootimage, MonoImage* image, MonoTypeNameParse *info, gboolean ignorecase, gboolean *type_resolve, MonoError *error);
@@ -66,10 +67,17 @@ static GENERATE_GET_CLASS_WITH_CACHE (exception_handling_clause, System.Reflecti
 static GENERATE_GET_CLASS_WITH_CACHE (type_builder, System.Reflection.Emit, TypeBuilder);
 static GENERATE_GET_CLASS_WITH_CACHE (dbnull, System, DBNull);
 
+
+static int class_ref_info_handle_count;
+
 void
 mono_reflection_init (void)
 {
 	mono_reflection_emit_init ();
+
+	mono_counters_register ("MonoClass::ref_info_handle count",
+							MONO_COUNTER_METADATA | MONO_COUNTER_INT, &class_ref_info_handle_count);
+
 }
 
 /*
@@ -81,11 +89,12 @@ gpointer
 mono_class_get_ref_info (MonoClass *klass)
 {
 	MONO_REQ_GC_UNSAFE_MODE;
+	guint32 ref_info_handle = mono_class_get_ref_info_handle (klass);
 
-	if (klass->ref_info_handle == 0)
+	if (ref_info_handle == 0)
 		return NULL;
 	else
-		return mono_gchandle_get_target (klass->ref_info_handle);
+		return mono_gchandle_get_target (ref_info_handle);
 }
 
 void
@@ -93,18 +102,23 @@ mono_class_set_ref_info (MonoClass *klass, gpointer obj)
 {
 	MONO_REQ_GC_UNSAFE_MODE;
 
-	klass->ref_info_handle = mono_gchandle_new ((MonoObject*)obj, FALSE);
-	g_assert (klass->ref_info_handle != 0);
+	guint32 candidate = mono_gchandle_new ((MonoObject*)obj, FALSE);
+	guint32 handle = mono_class_set_ref_info_handle (klass, candidate);
+	++class_ref_info_handle_count;
+
+	if (handle != candidate)
+		mono_gchandle_free (candidate);
 }
 
 void
 mono_class_free_ref_info (MonoClass *klass)
 {
 	MONO_REQ_GC_NEUTRAL_MODE;
+	guint32 handle = mono_class_get_ref_info_handle (klass);
 
-	if (klass->ref_info_handle) {
-		mono_gchandle_free (klass->ref_info_handle);
-		klass->ref_info_handle = 0;
+	if (handle) {
+		mono_gchandle_free (handle);
+		mono_class_set_ref_info_handle (klass, 0);
 	}
 }
 
@@ -343,7 +357,7 @@ mono_type_normalize (MonoType *type)
 		return type;
 
 	gtd = gclass->container_class;
-	gcontainer = gtd->generic_container;
+	gcontainer = mono_class_get_generic_container (gtd);
 	argv = g_newa (MonoType*, ginst->type_argc);
 
 	for (i = 0; i < ginst->type_argc; ++i) {
@@ -470,6 +484,17 @@ mono_type_get_object_checked (MonoDomain *domain, MonoType *type, MonoError *err
 	mono_domain_unlock (domain);
 	mono_loader_unlock ();
 	return res;
+}
+
+MonoReflectionTypeHandle
+mono_type_get_object_handle (MonoDomain *domain, MonoType *type, MonoError *error)
+{
+	/* NOTE: We happen to know that mono_type_get_object_checked returns
+	 * pinned objects, so we can just wrap its return value in a handle for
+	 * uniformity.  If it ever starts returning unpinned, objects, this
+	 * implementation would need to change!
+	 */
+	return MONO_HANDLE_NEW (MonoReflectionType, mono_type_get_object_checked (domain, type, error));
 }
 
 /*
@@ -2147,11 +2172,19 @@ mono_reflection_bind_generic_parameters (MonoReflectionType *type, int type_argc
 	}
 
 	klass = mono_class_from_mono_type (t);
-	if (!klass->generic_container) {
+	if (!mono_class_is_gtd (klass)) {
 		mono_loader_unlock ();
 		mono_error_set_type_load_class (error, klass, "Cannot bind generic parameters of a non-generic type");
 		return NULL;
 	}
+
+	guint gtd_type_argc = mono_class_get_generic_container (klass)->type_argc;
+	if (gtd_type_argc != type_argc) {
+		mono_loader_unlock ();
+		mono_error_set_argument (error, "types", "The generic type definition needs %d type arguments, but was instantiated with %d ", gtd_type_argc, type_argc);
+		return NULL;
+	}
+
 
 	if (klass->wastypebuilder)
 		is_dynamic = TRUE;
@@ -2169,7 +2202,7 @@ mono_class_bind_generic_parameters (MonoClass *klass, int type_argc, MonoType **
 	MonoGenericClass *gclass;
 	MonoGenericInst *inst;
 
-	g_assert (klass->generic_container);
+	g_assert (mono_class_is_gtd (klass));
 
 	inst = mono_metadata_get_generic_inst (type_argc, types);
 	gclass = mono_metadata_lookup_generic_class (klass, inst, is_dynamic);
@@ -2215,7 +2248,7 @@ reflection_bind_generic_method_parameters (MonoReflectionMethod *rmethod, MonoAr
 	ginst = mono_metadata_get_generic_inst (count, type_argv);
 	g_free (type_argv);
 
-	tmp_context.class_inst = klass->generic_class ? klass->generic_class->context.class_inst : NULL;
+	tmp_context.class_inst = mono_class_is_ginst (klass) ? mono_class_get_generic_class (klass)->context.class_inst : NULL;
 	tmp_context.method_inst = ginst;
 
 	inflated = mono_class_inflate_generic_method_checked (method, &tmp_context, error);
@@ -2345,8 +2378,9 @@ mono_declsec_flags_from_method (MonoMethod *method)
 guint32
 mono_declsec_flags_from_class (MonoClass *klass)
 {
-	if (klass->flags & TYPE_ATTRIBUTE_HAS_SECURITY) {
-		if (!klass->ext || !klass->ext->declsec_flags) {
+	if (mono_class_get_flags (klass) & TYPE_ATTRIBUTE_HAS_SECURITY) {
+		MonoClassExt *ext = mono_class_get_ext (klass);
+		if (!ext || !ext->declsec_flags) {
 			guint32 idx;
 
 			idx = mono_metadata_token_index (klass->type_token);
@@ -2354,11 +2388,12 @@ mono_declsec_flags_from_class (MonoClass *klass)
 			idx |= MONO_HAS_DECL_SECURITY_TYPEDEF;
 			mono_loader_lock ();
 			mono_class_alloc_ext (klass);
+			ext = mono_class_get_ext (klass);
 			mono_loader_unlock ();
 			/* we cache the flags on classes */
-			klass->ext->declsec_flags = mono_declsec_get_flags (klass->image, idx);
+			ext->declsec_flags = mono_declsec_get_flags (klass->image, idx);
 		}
-		return klass->ext->declsec_flags;
+		return ext->declsec_flags;
 	}
 	return 0;
 }

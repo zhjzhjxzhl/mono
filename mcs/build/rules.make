@@ -23,6 +23,7 @@ VERSION = 0.93
 Q=$(if $(V),,@)
 # echo -e "\\t" does not work on some systems, so use 5 spaces
 Q_MCS=$(if $(V),,@echo "MCS     [$(intermediate)$(PROFILE)] $(notdir $(@))";)
+Q_AOT=$(if $(V),,@echo "AOT     [$(intermediate)$(PROFILE)] $(notdir $(@))";)
 
 ifndef BUILD_TOOLS_PROFILE
 BUILD_TOOLS_PROFILE = build
@@ -116,22 +117,6 @@ endif
 
 include $(topdir)/build/profiles/$(PROFILE).make
 
-# If the profile is using nunit-lite, use it
-ifdef NUNIT_LITE
-TEST_HARNESS=$(topdir)/class/lib/$(PROFILE)/nunit-lite-console.exe
-endif
-
-# Make sure propagates
-export TEST_HARNESS
-
-# If the profile is using nunit-lite, use it
-ifdef NUNIT_LITE
-TEST_HARNESS=$(topdir)/class/lib/$(PROFILE)/nunit-lite-console.exe
-endif
-
-# Make sure propagates
-export TEST_HARNESS
-
 ifdef BCL_OPTIMIZE
 PROFILE_MCS_FLAGS += -optimize
 endif
@@ -179,7 +164,6 @@ STD_TARGETS = test run-test run-test-ondotnet clean install uninstall doc-update
 $(STD_TARGETS): %: do-%
 
 ifdef PLATFORM_AOT_SUFFIX
-AOT_PROFILE_ASSEMBLIES = $(shell cd $(topdir)/class/lib/$(PROFILE)/ && find . | grep -E '(dll|exe)$$' | grep -v -E 'bare|plaincore|secxml|Facades' | sed 's:\./::g' | tr '\n' ' ')
 
 do-all-aot:
 	$(MAKE) do-all TOP_LEVEL_DO=do-all
@@ -190,18 +174,16 @@ do-all-aot:
 # be able to evaluate the .dylibs to make
 ifneq ("$(wildcard $(topdir)/class/lib/$(PROFILE))","")
 
-AOT_PROFILE_ASSEMBLIES_CMD = cd $(topdir)/class/lib/$(PROFILE)/ && find . | grep -E '(dll|exe)$$' | grep -v -E 'bare|plaincore|secxml|Facades|ilasm' | sed 's:\./::g' | tr '\n' ' '
-AOT_PROFILE_ASSEMBLIES_CMD_SAFE = $(AOT_PROFILE_ASSEMBLIES_CMD) || true
-AOT_PROFILE_ASSEMBLIES = $(shell $(AOT_PROFILE_ASSEMBLIES_CMD_SAFE))
+AOT_PROFILE_ASSEMBLIES := $(sort $(patsubst .//%,%,$(filter-out %bare% %plaincore% %secxml% %Facades% %ilasm%,$(filter %.dll %.exe,$(wildcard $(topdir)/class/lib/$(PROFILE)/*)))))
 
 # This can run in parallel
 .PHONY: aot-all-profile
-aot-all-profile: $(patsubst %,$(topdir)/class/lib/$(PROFILE)/%$(PLATFORM_AOT_SUFFIX),$(AOT_PROFILE_ASSEMBLIES))
+aot-all-profile: $(patsubst %,%$(PLATFORM_AOT_SUFFIX),$(AOT_PROFILE_ASSEMBLIES))
 
-$(topdir)/class/lib/$(PROFILE)/%$(PLATFORM_AOT_SUFFIX): $(topdir)/class/lib/$(PROFILE)/%
-	@ mkdir -p $(topdir)/class/lib/$(PROFILE)/$*_bitcode_tmp
-	@echo "AOT     [$(PROFILE)] AOT $* " && cd $(topdir)/class/lib/$(PROFILE)/ && MONO_PATH="." $(RUNTIME) $(RUNTIME_FLAGS) $(AOT_BUILD_FLAGS),temp-path=$*_bitcode_tmp $* >> $(PROFILE)-aot.log
-	@ rm -rf $(topdir)/class/lib/$(PROFILE)/$*_bitcode_tmp
+%$(PLATFORM_AOT_SUFFIX): %
+	@ mkdir -p $*_bitcode_tmp
+	$(Q_AOT) MONO_PATH="$(dir $*)" $(RUNTIME) $(RUNTIME_FLAGS) $(AOT_BUILD_FLAGS),temp-path=$*_bitcode_tmp --verbose $* > $@.aot-log
+	@ rm -rf $*_bitcode_tmp
 
 endif #ifneq ("$(wildcard $(topdir)/class/lib/$(PROFILE))","")
 

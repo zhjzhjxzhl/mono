@@ -62,7 +62,7 @@
 #include <mono/utils/mono-threads.h>
 #include <mono/utils/mono-memory-model.h>
 #include <mono/utils/networking.h>
-#include <mono/utils/w32handle.h>
+#include <mono/metadata/w32handle.h>
 
 #include <time.h>
 #ifdef HAVE_SYS_TIME_H
@@ -91,6 +91,10 @@
 #ifdef HAVE_GETIFADDRS
 // <net/if.h> must be included before <ifaddrs.h>
 #include <ifaddrs.h>
+#endif
+
+#if defined(_MSC_VER) && G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT)
+#include <MSWSock.h>
 #endif
 
 #include "mono/io-layer/socket-wrappers.h"
@@ -589,61 +593,6 @@ get_socket_assembly (void)
 	}
 	
 	return domain->socket_assembly;
-}
-
-static gint32
-get_family_hint (MonoError *error)
-{
-	MonoDomain *domain = mono_domain_get ();
-
-	mono_error_init (error);
-
-	if (!domain->inet_family_hint) {
-		MonoImage *socket_assembly;
-		MonoClass *socket_class;
-		MonoClassField *ipv6_field, *ipv4_field;
-		gint32 ipv6_enabled = -1, ipv4_enabled = -1;
-		MonoVTable *vtable;
-
-		socket_assembly = get_socket_assembly ();
-		g_assert (socket_assembly);
-
-		socket_class = mono_class_load_from_name (socket_assembly, "System.Net.Sockets", "Socket");
-
-		ipv4_field = mono_class_get_field_from_name (socket_class, "ipv4_supported");
-		g_assert (ipv4_field);
-
-		ipv6_field = mono_class_get_field_from_name (socket_class, "ipv6_supported");
-		g_assert (ipv6_field);
-
-		vtable = mono_class_vtable (mono_domain_get (), socket_class);
-		g_assert (vtable);
-
-		mono_runtime_class_init_full (vtable, error);
-		return_val_if_nok (error, -1);
-
-		mono_field_static_get_value_checked (vtable, ipv4_field, &ipv4_enabled, error);
-		return_val_if_nok (error, -1);
-		mono_field_static_get_value_checked (vtable, ipv6_field, &ipv6_enabled, error);
-		return_val_if_nok (error, -1);
-
-		mono_domain_lock (domain);
-		if (ipv4_enabled == 1 && ipv6_enabled == 1) {
-			domain->inet_family_hint = 1;
-		} else if (ipv4_enabled == 1) {
-			domain->inet_family_hint = 2;
-		} else {
-			domain->inet_family_hint = 3;
-		}
-		mono_domain_unlock (domain);
-	}
-	switch (domain->inet_family_hint) {
-	case 1: return PF_UNSPEC;
-	case 2: return PF_INET;
-	case 3: return PF_INET6;
-	default:
-		return PF_UNSPEC;
-	}
 }
 
 gpointer
@@ -1293,7 +1242,7 @@ ves_icall_System_Net_Sockets_Socket_Poll_internal (SOCKET sock, gint mode,
 
 	if (ret == -1) {
 #ifdef HOST_WIN32
-		*werror = WSAGetLastError ();
+		*werror = errno > 0 && errno < WSABASEERR ? errno + WSABASEERR : errno;
 #else
 		*werror = errno_to_WSA (errno, __func__);
 #endif
@@ -1352,6 +1301,7 @@ ves_icall_System_Net_Sockets_Socket_Connect_internal (SOCKET sock, MonoObject *s
 	g_free (sa);
 }
 
+#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT)
 /* These #defines from mswsock.h from wine.  Defining them here allows
  * us to build this file on a mingw box that doesn't know the magic
  * numbers, but still run on a newer windows box that does.
@@ -1442,6 +1392,7 @@ ves_icall_System_Net_Sockets_Socket_Disconnect_internal (SOCKET sock, MonoBoolea
 	if (interrupted)
 		*werror = WSAEINTR;
 }
+#endif /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT) */
 
 gint32
 ves_icall_System_Net_Sockets_Socket_Receive_internal (SOCKET sock, MonoArray *buffer, gint32 offset, gint32 count, gint32 flags, gint32 *werror, gboolean blocking)
@@ -1917,7 +1868,7 @@ ves_icall_System_Net_Sockets_Socket_Select_internal (MonoArray **sockets, gint32
 	
 	if (ret == -1) {
 #ifdef HOST_WIN32
-		*werror = WSAGetLastError ();
+		*werror = errno > 0 && errno < WSABASEERR ? errno + WSABASEERR : errno;
 #else
 		*werror = errno_to_WSA (errno, __func__);
 #endif
@@ -2640,49 +2591,17 @@ leave2:
 	return is_ok (error);
 }
 
-static int
-get_addrinfo_family_hint (MonoError *error)
-{
-	int hint;
-
-	mono_error_init (error);
-
-	hint = get_family_hint (error);
-	return_val_if_nok (error, 0);
-
-	switch (hint) {
-	case PF_UNSPEC:
-		return MONO_HINT_UNSPECIFIED;
-	case PF_INET:
-		return MONO_HINT_IPV4;
-#ifdef PF_INET6
-	case PF_INET6:
-		return MONO_HINT_IPV6;
-#endif
-	default:
-		g_error ("invalid hint");
-		return 0;
-	}
-}
-
 MonoBoolean
-ves_icall_System_Net_Dns_GetHostByName_internal (MonoString *host, MonoString **h_name, MonoArray **h_aliases, MonoArray **h_addr_list)
+ves_icall_System_Net_Dns_GetHostByName_internal (MonoString *host, MonoString **h_name, MonoArray **h_aliases, MonoArray **h_addr_list, gint32 hint)
 {
 	MonoError error;
 	gboolean add_local_ips = FALSE, add_info_ok = TRUE;
 	gchar this_hostname [256];
 	MonoAddressInfo *info = NULL;
-	int hint;
 
 	char *hostname = mono_string_to_utf8_checked (host, &error);
 	if (mono_error_set_pending_exception (&error))
 		return FALSE;
-
-	hint = get_addrinfo_family_hint (&error);
-	if (!mono_error_ok (&error)) {
-		mono_error_set_pending_exception (&error);
-		return FALSE;
-	}
 
 	if (*hostname == '\0') {
 		add_local_ips = TRUE;
@@ -2718,14 +2637,14 @@ ves_icall_System_Net_Dns_GetHostByName_internal (MonoString *host, MonoString **
 }
 
 MonoBoolean
-ves_icall_System_Net_Dns_GetHostByAddr_internal (MonoString *addr, MonoString **h_name, MonoArray **h_aliases, MonoArray **h_addr_list)
+ves_icall_System_Net_Dns_GetHostByAddr_internal (MonoString *addr, MonoString **h_name, MonoArray **h_aliases, MonoArray **h_addr_list, gint32 hint)
 {
 	char *address;
 	struct sockaddr_in saddr;
 	struct sockaddr_in6 saddr6;
 	MonoAddressInfo *info = NULL;
 	MonoError error;
-	gint32 family, hint;
+	gint32 family;
 	gchar hostname [NI_MAXHOST] = { 0 };
 	gboolean ret;
 
@@ -2772,11 +2691,6 @@ ves_icall_System_Net_Dns_GetHostByAddr_internal (MonoString *addr, MonoString **
 	if (!ret)
 		return FALSE;
 
-	hint = get_addrinfo_family_hint (&error);
-	if (!mono_error_ok (&error)) {
-		mono_error_set_pending_exception (&error);
-		return FALSE;
-	}
 	if (mono_get_address_info (hostname, 0, hint | MONO_HINT_CANONICAL_NAME | MONO_HINT_CONFIGURED_ONLY, &info) != 0)
 		return FALSE;
 
@@ -2800,6 +2714,7 @@ ves_icall_System_Net_Dns_GetHostName_internal (MonoString **h_name)
 	return TRUE;
 }
 
+#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT)
 gboolean
 ves_icall_System_Net_Sockets_Socket_SendFile_internal (SOCKET sock, MonoString *filename, MonoArray *pre_buffer, MonoArray *post_buffer, gint flags, gint32 *werror, gboolean blocking)
 {
@@ -2868,6 +2783,7 @@ ves_icall_System_Net_Sockets_Socket_SendFile_internal (SOCKET sock, MonoString *
 
 	return ret;
 }
+#endif /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT) */
 
 gboolean
 ves_icall_System_Net_Sockets_Socket_SupportPortReuse (MonoProtocolType proto)

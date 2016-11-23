@@ -273,15 +273,15 @@ load_image (MonoAotModule *amodule, int index, MonoError *error)
 
 	assembly = mono_assembly_load (&amodule->image_names [index], amodule->assembly->basedir, &status);
 	if (!assembly) {
-		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT: module %s is unusable because dependency %s is not found.\n", amodule->aot_name, amodule->image_names [index].name);
+		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT: module %s is unusable because dependency %s is not found.", amodule->aot_name, amodule->image_names [index].name);
 		mono_error_set_bad_image_name (error, amodule->aot_name, "module is unusable because dependency %s is not found (error %d).\n", amodule->image_names [index].name, status);
 		amodule->out_of_date = TRUE;
 		return NULL;
 	}
 
 	if (strcmp (assembly->image->guid, amodule->image_guids [index])) {
-		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT: module %s is unusable (GUID of dependent assembly %s doesn't match (expected '%s', got '%s').\n", amodule->aot_name, amodule->image_names [index].name, amodule->image_guids [index], assembly->image->guid);
-		mono_error_set_bad_image_name (error, amodule->aot_name, "module is unusable (GUID of dependent assembly %s doesn't match (expected '%s', got '%s').\n", amodule->image_names [index].name, amodule->image_guids [index], assembly->image->guid);
+		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT: module %s is unusable (GUID of dependent assembly %s doesn't match (expected '%s', got '%s').", amodule->aot_name, amodule->image_names [index].name, amodule->image_guids [index], assembly->image->guid);
+		mono_error_set_bad_image_name (error, amodule->aot_name, "module is unusable (GUID of dependent assembly %s doesn't match (expected '%s', got '%s').", amodule->image_names [index].name, amodule->image_guids [index], assembly->image->guid);
 		amodule->out_of_date = TRUE;
 		return NULL;
 	}
@@ -478,7 +478,7 @@ decode_klass_ref (MonoAotModule *module, guint8 *buf, guint8 **endbuf, MonoError
 		gclass = decode_klass_ref (module, p, &p, error);
 		if (!gclass)
 			return NULL;
-		g_assert (gclass->generic_container);
+		g_assert (mono_class_is_gtd (gclass));
 
 		memset (&ctx, 0, sizeof (ctx));
 		ctx.class_inst = decode_generic_inst (module, p, &p, error);
@@ -533,7 +533,7 @@ decode_klass_ref (MonoAotModule *module, guint8 *buf, guint8 **endbuf, MonoError
 					if (!class_def)
 						return NULL;
 
-					container = class_def->generic_container;
+					container = mono_class_try_get_generic_container (class_def); //FIXME is this a case for a try_get?
 				}
 			} else {
 				// We didn't decode is_method, so we have to infer it from type enum.
@@ -689,7 +689,7 @@ decode_type (MonoAotModule *module, guint8 *buf, guint8 **endbuf, MonoError *err
 		gclass = decode_klass_ref (module, p, &p, error);
 		if (!gclass)
 			goto fail;
-		g_assert (gclass->generic_container);
+		g_assert (mono_class_is_gtd (gclass));
 
 		memset (&ctx, 0, sizeof (ctx));
 		ctx.class_inst = decode_generic_inst (module, p, &p, error);
@@ -699,7 +699,7 @@ decode_type (MonoAotModule *module, guint8 *buf, guint8 **endbuf, MonoError *err
 		if (!type)
 			goto fail;
 		klass = mono_class_from_mono_type (type);
-		t->data.generic_class = klass->generic_class;
+		t->data.generic_class = mono_class_get_generic_class (klass);
 		break;
 	}
 	case MONO_TYPE_ARRAY: {
@@ -1264,8 +1264,8 @@ decode_method_ref_with_target (MonoAotModule *module, MethodRef *ref, MonoMethod
 
 		memset (&ctx, 0, sizeof (ctx));
 
-		if (FALSE && klass->generic_class) {
-			ctx.class_inst = klass->generic_class->context.class_inst;
+		if (FALSE && mono_class_is_ginst (klass)) {
+			ctx.class_inst = mono_class_get_generic_class (klass)->context.class_inst;
 			ctx.method_inst = NULL;
  
 			ref->method = mono_class_inflate_generic_method_full_checked (ref->method, klass, &ctx, error);
@@ -1964,7 +1964,7 @@ load_aot_module (MonoAssembly *assembly, gpointer user_data)
 	if (info) {
 		/* Statically linked AOT module */
 		aot_name = g_strdup_printf ("%s", assembly->aname.name);
-		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "Found statically linked AOT module '%s'.\n", aot_name);
+		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "Found statically linked AOT module '%s'.", aot_name);
 		if (!(info->flags & MONO_AOT_FILE_FLAG_LLVM_ONLY)) {
 			globals = (void **)info->globals;
 			g_assert (globals);
@@ -1979,7 +1979,7 @@ load_aot_module (MonoAssembly *assembly, gpointer user_data)
 			sofile = mono_dl_open (aot_name, MONO_DL_LAZY, &err);
 
 			if (!sofile) {
-				mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT module '%s' not found: %s\n", aot_name, err);
+				mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT module '%s' not found: %s", aot_name, err);
 				g_free (err);
 
 				g_free (aot_name);
@@ -1988,7 +1988,7 @@ load_aot_module (MonoAssembly *assembly, gpointer user_data)
 				g_free (basename);
 				sofile = mono_dl_open (aot_name, MONO_DL_LAZY, &err);
 				if (!sofile) {
-					mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT module '%s' not found: %s\n", aot_name, err);
+					mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT module '%s' not found: %s", aot_name, err);
 					g_free (err);
 				}
 
@@ -2040,7 +2040,7 @@ load_aot_module (MonoAssembly *assembly, gpointer user_data)
 		if (mono_aot_only) {
 			g_error ("Failed to load AOT module '%s' while running in aot-only mode: %s.\n", aot_name, msg);
 		} else {
-			mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT: module %s is unusable: %s.\n", aot_name, msg);
+			mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT: module %s is unusable: %s.", aot_name, msg);
 		}
 		g_free (msg);
 		g_free (aot_name);
@@ -2278,12 +2278,12 @@ load_aot_module (MonoAssembly *assembly, gpointer user_data)
 	}
 
 	if (amodule->out_of_date) {
-		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT: Module %s is unusable because a dependency is out-of-date.\n", assembly->image->name);
+		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT: Module %s is unusable because a dependency is out-of-date.", assembly->image->name);
 		if (mono_aot_only)
 			g_error ("Failed to load AOT module '%s' while running in aot-only mode because a dependency cannot be found or it is out of date.\n", aot_name);
 	}
 	else
-		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT: loaded AOT Module for %s.\n", assembly->image->name);
+		mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_AOT, "AOT: loaded AOT Module for %s.", assembly->image->name);
 }
 
 /*
@@ -2449,7 +2449,7 @@ mono_aot_get_cached_class_info (MonoClass *klass, MonoCachedClassInfo *res)
 	guint8 *p;
 	gboolean err;
 
-	if (klass->rank || !amodule)
+	if (klass->rank || !klass->type_token || !amodule)
 		return FALSE;
 
 	p = (guint8*)&amodule->blob [mono_aot_get_offset (amodule->class_info_offsets, mono_metadata_token_index (klass->type_token) - 1)];
@@ -3707,6 +3707,7 @@ decode_patch (MonoAotModule *aot_module, MonoMemPool *mp, MonoJumpInfo *ji, guin
 		break;
 	}
 	case MONO_PATCH_INFO_GC_SAFE_POINT_FLAG:
+	case MONO_PATCH_INFO_GET_TLS_TRAMP:
 		break;
 	case MONO_PATCH_INFO_AOT_JIT_INFO:
 		ji->data.index = decode_value (p, &p);
@@ -4217,7 +4218,7 @@ init_method (MonoAotModule *amodule, guint32 method_index, MonoMethod *method, M
 	gboolean inited_ok = TRUE;
 	if (init_class)
 		inited_ok = mono_runtime_class_init_full (mono_class_vtable (domain, init_class), error);
-	else if (from_plt && klass_to_run_ctor && !klass_to_run_ctor->generic_container)
+	else if (from_plt && klass_to_run_ctor && !mono_class_is_gtd (klass_to_run_ctor))
 		inited_ok = mono_runtime_class_init_full (mono_class_vtable (domain, klass_to_run_ctor), error);
 	if (!inited_ok)
 		return FALSE;
@@ -4284,10 +4285,10 @@ mono_aot_init_gshared_method_mrgctx (gpointer aot_module, guint32 method_index, 
 	MonoGenericContext context = { NULL, NULL };
 	MonoClass *klass = rgctx->class_vtable->klass;
 
-	if (klass->generic_class)
-		context.class_inst = klass->generic_class->context.class_inst;
-	else if (klass->generic_container)
-		context.class_inst = klass->generic_container->context.class_inst;
+	if (mono_class_is_ginst (klass))
+		context.class_inst = mono_class_get_generic_class (klass)->context.class_inst;
+	else if (mono_class_is_gtd (klass))
+		context.class_inst = mono_class_get_generic_container (klass)->context.class_inst;
 	context.method_inst = rgctx->method_inst;
 
 	init_llvmonly_method (amodule, method_index, NULL, rgctx->class_vtable->klass, &context);

@@ -1194,7 +1194,7 @@ mono_image_fill_export_table_from_class (MonoDomain *domain, MonoClass *klass,
 	guint32 *values;
 	guint32 visib, res;
 
-	visib = klass->flags & TYPE_ATTRIBUTE_VISIBILITY_MASK;
+	visib = mono_class_get_flags (klass) & TYPE_ATTRIBUTE_VISIBILITY_MASK;
 	if (! ((visib & TYPE_ATTRIBUTE_PUBLIC) || (visib & TYPE_ATTRIBUTE_NESTED_PUBLIC)))
 		return 0;
 
@@ -1203,7 +1203,7 @@ mono_image_fill_export_table_from_class (MonoDomain *domain, MonoClass *klass,
 	alloc_table (table, table->rows);
 	values = table->values + table->next_idx * MONO_EXP_TYPE_SIZE;
 
-	values [MONO_EXP_TYPE_FLAGS] = klass->flags;
+	values [MONO_EXP_TYPE_FLAGS] = mono_class_get_flags (klass);
 	values [MONO_EXP_TYPE_TYPEDEF] = klass->type_token;
 	if (klass->nested_in)
 		values [MONO_EXP_TYPE_IMPLEMENTATION] = (parent_index << MONO_IMPLEMENTATION_BITS) + MONO_IMPLEMENTATION_EXP_TYPE;
@@ -1217,10 +1217,11 @@ mono_image_fill_export_table_from_class (MonoDomain *domain, MonoClass *klass,
 	table->next_idx ++;
 
 	/* Emit nested types */
-	if (klass->ext && klass->ext->nested_classes) {
+	MonoClassExt *ext = mono_class_get_ext (klass);
+	if (ext && ext->nested_classes) {
 		GList *tmp;
 
-		for (tmp = klass->ext->nested_classes; tmp; tmp = tmp->next)
+		for (tmp = ext->nested_classes; tmp; tmp = tmp->next)
 			mono_image_fill_export_table_from_class (domain, (MonoClass *)tmp->data, module_index, table->next_idx - 1, assembly);
 	}
 
@@ -1274,7 +1275,7 @@ mono_image_fill_export_table_from_module (MonoDomain *domain, MonoReflectionModu
 		MonoClass *klass = mono_class_get_checked (image, mono_metadata_make_token (MONO_TABLE_TYPEDEF, i + 1), &error);
 		g_assert (mono_error_ok (&error)); /* FIXME don't swallow the error */
 
-		if (klass->flags & TYPE_ATTRIBUTE_PUBLIC)
+		if (mono_class_is_public (klass))
 			mono_image_fill_export_table_from_class (domain, klass, module_index, 0, assembly);
 	}
 }
@@ -1743,7 +1744,7 @@ fixup_method (MonoReflectionILGen *ilgen, gpointer value, MonoDynamicImage *asse
 			} else if (!strcmp (iltoken->member->vtable->klass->name, "MonoMethod") ||
 					   !strcmp (iltoken->member->vtable->klass->name, "MonoCMethod")) {
 				MonoMethod *m = ((MonoReflectionMethod*)iltoken->member)->method;
-				g_assert (m->klass->generic_class || m->klass->generic_container);
+				g_assert (mono_class_is_ginst (m->klass) || mono_class_is_gtd (m->klass));
 				continue;
 			} else if (!strcmp (iltoken->member->vtable->klass->name, "FieldBuilder")) {
 				g_assert_not_reached ();

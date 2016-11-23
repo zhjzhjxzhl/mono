@@ -505,9 +505,11 @@ enum {
 
 /* FIXME: Add more instructions */
 /* INEG sets the condition codes, and the OP_LNEG decomposition depends on this on x86 */
-#define MONO_INS_HAS_NO_SIDE_EFFECT(ins) (MONO_IS_MOVE (ins) || (ins->opcode == OP_ICONST) || (ins->opcode == OP_I8CONST) || MONO_IS_ZERO (ins) || (ins->opcode == OP_ADD_IMM) || (ins->opcode == OP_R8CONST) || (ins->opcode == OP_LADD_IMM) || (ins->opcode == OP_ISUB_IMM) || (ins->opcode == OP_IADD_IMM) || (ins->opcode == OP_LNEG) || (ins->opcode == OP_ISUB) || (ins->opcode == OP_CMOV_IGE) || (ins->opcode == OP_ISHL_IMM) || (ins->opcode == OP_ISHR_IMM) || (ins->opcode == OP_ISHR_UN_IMM) || (ins->opcode == OP_IAND_IMM) || (ins->opcode == OP_ICONV_TO_U1) || (ins->opcode == OP_ICONV_TO_I1) || (ins->opcode == OP_SEXT_I4) || (ins->opcode == OP_LCONV_TO_U1) || (ins->opcode == OP_ICONV_TO_U2) || (ins->opcode == OP_ICONV_TO_I2) || (ins->opcode == OP_LCONV_TO_I2) || (ins->opcode == OP_LDADDR) || (ins->opcode == OP_PHI) || (ins->opcode == OP_NOP) || (ins->opcode == OP_ZEXT_I4) || (ins->opcode == OP_NOT_NULL) || (ins->opcode == OP_IL_SEQ_POINT))
+#define MONO_INS_HAS_NO_SIDE_EFFECT(ins) (MONO_IS_MOVE (ins) || (ins->opcode == OP_ICONST) || (ins->opcode == OP_I8CONST) || MONO_IS_ZERO (ins) || (ins->opcode == OP_ADD_IMM) || (ins->opcode == OP_R8CONST) || (ins->opcode == OP_LADD_IMM) || (ins->opcode == OP_ISUB_IMM) || (ins->opcode == OP_IADD_IMM) || (ins->opcode == OP_LNEG) || (ins->opcode == OP_ISUB) || (ins->opcode == OP_CMOV_IGE) || (ins->opcode == OP_ISHL_IMM) || (ins->opcode == OP_ISHR_IMM) || (ins->opcode == OP_ISHR_UN_IMM) || (ins->opcode == OP_IAND_IMM) || (ins->opcode == OP_ICONV_TO_U1) || (ins->opcode == OP_ICONV_TO_I1) || (ins->opcode == OP_SEXT_I4) || (ins->opcode == OP_LCONV_TO_U1) || (ins->opcode == OP_ICONV_TO_U2) || (ins->opcode == OP_ICONV_TO_I2) || (ins->opcode == OP_LCONV_TO_I2) || (ins->opcode == OP_LDADDR) || (ins->opcode == OP_PHI) || (ins->opcode == OP_NOP) || (ins->opcode == OP_ZEXT_I4) || (ins->opcode == OP_NOT_NULL) || (ins->opcode == OP_IL_SEQ_POINT) || (ins->opcode == OP_XZERO))
 
-#define MONO_METHOD_IS_FINAL(m) (((m)->flags & METHOD_ATTRIBUTE_FINAL) || ((m)->klass && ((m)->klass->flags & TYPE_ATTRIBUTE_SEALED)))
+#define MONO_INS_IS_PCONST_NULL(ins) ((ins)->opcode == OP_PCONST && (ins)->inst_p0 == 0)
+
+#define MONO_METHOD_IS_FINAL(m) (((m)->flags & METHOD_ATTRIBUTE_FINAL) || ((m)->klass && (mono_class_get_flags ((m)->klass) & TYPE_ATTRIBUTE_SEALED)))
 
 
 #ifdef MONO_ARCH_SIMD_INTRINSICS
@@ -1496,6 +1498,7 @@ typedef struct {
 	guint            need_got_var : 1;
 	guint            need_div_check : 1;
 	guint            no_unaligned_access : 1;
+	guint            disable_div_with_mul : 1;
 	int              monitor_enter_adjustment;
 	int              dyn_call_param_area;
 } MonoBackend;
@@ -1510,12 +1513,14 @@ typedef enum {
 	JIT_FLAG_FULL_AOT = (1 << 2),
 	/* Whenever to compile with LLVM */
 	JIT_FLAG_LLVM = (1 << 3),
-	/* Whenever to disable direct calls to direct calls to icall functions */
+	/* Whenever to disable direct calls to icall functions */
 	JIT_FLAG_NO_DIRECT_ICALLS = (1 << 4),
 	/* Emit explicit null checks */
 	JIT_FLAG_EXPLICIT_NULL_CHECKS = (1 << 5),
 	/* Whenever to compile in llvm-only mode */
 	JIT_FLAG_LLVM_ONLY = (1 << 6),
+	/* Whenever calls to pinvoke functions are made directly */
+	JIT_FLAG_DIRECT_PINVOKE = (1 << 7)
 } JitFlags;
 
 /* Bit-fields in the MonoBasicBlock.region */
@@ -1685,6 +1690,7 @@ typedef struct {
 	guint            disable_out_of_line_bblocks : 1;
 	guint            disable_direct_icalls : 1;
 	guint            disable_gc_safe_points : 1;
+	guint            direct_pinvoke : 1;
 	guint            create_lmf_var : 1;
 	/*
 	 * When this is set, the code to push/pop the LMF from the LMF stack is generated as IR
@@ -1740,7 +1746,7 @@ typedef struct {
 	guint8          *thunks;
 	/* Offset between the start of code and the thunks area */
 	int              thunks_offset;
-	guint32          exception_type;	/* MONO_EXCEPTION_* */
+	MonoExceptionType exception_type;	/* MONO_EXCEPTION_* */
 	guint32          exception_data;
 	char*            exception_message;
 	gpointer         exception_ptr;
@@ -2613,6 +2619,7 @@ gboolean          mono_is_regsize_var (MonoType *t);
 void              mini_emit_memcpy (MonoCompile *cfg, int destreg, int doffset, int srcreg, int soffset, int size, int align);
 void              mini_emit_stobj (MonoCompile *cfg, MonoInst *dest, MonoInst *src, MonoClass *klass, gboolean native);
 void              mini_emit_initobj (MonoCompile *cfg, MonoInst *dest, const guchar *ip, MonoClass *klass);
+MonoInst*         mini_emit_ldelema_1_ins (MonoCompile *cfg, MonoClass *klass, MonoInst *arr, MonoInst *index, gboolean bcheck);
 CompRelation      mono_opcode_to_cond (int opcode) MONO_LLVM_INTERNAL;
 CompType          mono_opcode_to_type (int opcode, int cmp_opcode);
 CompRelation      mono_negate_cond (CompRelation cond);
@@ -2676,6 +2683,7 @@ guint8*   mono_arch_create_sdb_trampoline (gboolean single_step, MonoTrampInfo *
 gpointer  mono_arch_create_monitor_enter_trampoline (MonoTrampInfo **info, gboolean is_v4, gboolean aot);
 gpointer  mono_arch_create_monitor_exit_trampoline (MonoTrampInfo **info, gboolean aot);
 guint8   *mono_arch_create_llvm_native_thunk     (MonoDomain *domain, guint8* addr) MONO_LLVM_INTERNAL;
+gpointer  mono_arch_get_get_tls_tramp (void);
 GList    *mono_arch_get_allocatable_int_vars    (MonoCompile *cfg);
 GList    *mono_arch_get_global_int_regs         (MonoCompile *cfg);
 GList    *mono_arch_get_global_fp_regs          (MonoCompile *cfg);
@@ -3121,6 +3129,7 @@ enum {
 const char *mono_arch_xregname (int reg);
 void        mono_simd_simplify_indirection (MonoCompile *cfg);
 MonoInst*   mono_emit_simd_intrinsics (MonoCompile *cfg, MonoMethod *cmethod, MonoMethodSignature *fsig, MonoInst **args);
+MonoInst*   mono_emit_simd_field_load (MonoCompile *cfg, MonoClassField *field, MonoInst *addr);
 guint32     mono_arch_cpu_enumerate_simd_versions (void);
 void        mono_simd_intrinsics_init (void);
 
@@ -3149,6 +3158,8 @@ gboolean mono_jit_map_is_enabled (void);
  * Per-OS implementation functions.
  */
 void mono_runtime_install_handlers (void);
+gboolean mono_runtime_install_custom_handlers (const char *handlers);
+void mono_runtime_install_custom_handlers_usage (void);
 void mono_runtime_cleanup_handlers (void);
 void mono_runtime_setup_stat_profiler (void);
 void mono_runtime_shutdown_stat_profiler (void);
