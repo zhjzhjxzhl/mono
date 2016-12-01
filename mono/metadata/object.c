@@ -5954,6 +5954,52 @@ ves_icall_array_new_specific (MonoVTable *vtable, uintptr_t n)
 }
 
 /**
+ * mono_string_empty_wrapper:
+ *
+ * Returns: The same empty string instance as the managed string.Empty
+ */
+MonoString*
+mono_string_empty_wrapper ()
+{
+	MonoError error;
+	MonoString *res = NULL;
+	MonoDomain *domain = mono_domain_get ();
+	res = mono_string_empty_checked (domain, &error);
+	mono_error_cleanup (&error);
+	return res;
+}
+
+/**
+ * mono_string_empty:
+ *
+ * Returns: The same empty string instance as the managed string.Empty
+ */
+MonoString*
+mono_string_empty (MonoDomain *domain)
+{
+	MonoError error;
+	MonoString *res = NULL;
+	res = mono_string_empty_checked (domain, &error);
+	mono_error_cleanup (&error);
+	return res;
+}
+
+/**
+ * mono_string_empty_checked:
+ *
+ * Returns: The same empty string instance as the managed string.Empty
+ */
+MonoString*
+mono_string_empty_checked (MonoDomain *domain, MonoError *error)
+{
+	mono_error_init (error);
+
+	g_assert (domain);
+	g_assert (domain->empty_string);
+	return domain->empty_string;
+}
+
+/**
  * mono_string_new_utf16:
  * @text: a pointer to an utf16 string
  * @len: the length of the string
@@ -6073,36 +6119,32 @@ mono_string_new_size_checked (MonoDomain *domain, gint32 len, MonoError *error)
 {
 	MONO_REQ_GC_UNSAFE_MODE;
 
-	if (len == 0 && domain->empty_string != NULL) {
-		return domain->empty_string;
-	} else {
-		MonoString *s;
-		MonoVTable *vtable;
-		size_t size;
+	MonoString *s;
+	MonoVTable *vtable;
+	size_t size;
 
-		mono_error_init (error);
+	mono_error_init (error);
 
-		/* check for overflow */
-		if (len < 0 || len > ((SIZE_MAX - G_STRUCT_OFFSET (MonoString, chars) - 8) / 2)) {
-			mono_error_set_out_of_memory (error, "Could not allocate %i bytes", -1);
-			return NULL;
-		}
-
-		size = (G_STRUCT_OFFSET (MonoString, chars) + (((size_t)len + 1) * 2));
-		g_assert (size > 0);
-
-		vtable = mono_class_vtable (domain, mono_defaults.string_class);
-		g_assert (vtable);
-
-		s = (MonoString *)mono_gc_alloc_string (vtable, size, len);
-
-		if (G_UNLIKELY (!s)) {
-			mono_error_set_out_of_memory (error, "Could not allocate %zd bytes", size);
-			return NULL;
-		}
-
-		return s;
+	/* check for overflow */
+	if (len < 0 || len > ((SIZE_MAX - G_STRUCT_OFFSET (MonoString, chars) - 8) / 2)) {
+		mono_error_set_out_of_memory (error, "Could not allocate %i bytes", -1);
+		return NULL;
 	}
+
+	size = (G_STRUCT_OFFSET (MonoString, chars) + (((size_t)len + 1) * 2));
+	g_assert (size > 0);
+
+	vtable = mono_class_vtable (domain, mono_defaults.string_class);
+	g_assert (vtable);
+
+	s = (MonoString *)mono_gc_alloc_string (vtable, size, len);
+
+	if (G_UNLIKELY (!s)) {
+		mono_error_set_out_of_memory (error, "Could not allocate %zd bytes", size);
+		return NULL;
+	}
+
+	return s;
 }
 
 /**
