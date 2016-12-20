@@ -1003,7 +1003,7 @@ mono_install_get_class_from_name (MonoGetClassFromName func);
 MonoGenericContext*
 mono_class_get_context (MonoClass *klass);
 
-MonoMethodSignature*
+MONO_API MonoMethodSignature*
 mono_method_signature_checked (MonoMethod *m, MonoError *err);
 
 MonoGenericContext*
@@ -1397,7 +1397,7 @@ mono_class_full_name (MonoClass *klass);
 MonoClass*
 mono_class_inflate_generic_class_checked (MonoClass *gklass, MonoGenericContext *context, MonoError *error);
 
-MonoClass *
+MONO_API MonoClass *
 mono_class_get_checked (MonoImage *image, guint32 type_token, MonoError *error);
 
 MonoClass *
