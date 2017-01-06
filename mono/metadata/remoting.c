@@ -81,8 +81,10 @@ static MonoMethod *method_rs_serialize, *method_rs_deserialize, *method_exc_fixe
 static MonoMethod *method_set_call_context, *method_needs_context_sink, *method_rs_serialize_exc;
 #endif
 
+#if !defined (DISABLE_JIT)
 static gpointer
 mono_compile_method_icall (MonoMethod *method);
+#endif
 
 static void
 register_icall (gpointer func, const char *name, const char *sigstr, gboolean save)
@@ -197,7 +199,9 @@ mono_remoting_marshal_init (void)
 		register_icall (mono_marshal_xdomain_copy_out_value, "mono_marshal_xdomain_copy_out_value", "void object object", FALSE);
 		register_icall (mono_remoting_wrapper, "mono_remoting_wrapper", "object ptr ptr", FALSE);
 		register_icall (mono_upgrade_remote_class_wrapper, "mono_upgrade_remote_class_wrapper", "void object object", FALSE);
+#if !defined (DISABLE_JIT)
 		register_icall (mono_compile_method_icall, "mono_compile_method_icall", "ptr ptr", FALSE);
+#endif
 
 	}
 

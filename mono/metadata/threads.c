@@ -216,6 +216,9 @@ static gint32 managed_thread_id_counter = 0;
 /* Class lazy loading functions */
 static GENERATE_GET_CLASS_WITH_CACHE (appdomain_unloaded_exception, System, AppDomainUnloadedException)
 
+static gint32
+mono_wait_uninterrupted(MonoInternalThread *thread, guint32 numhandles, gpointer *handles, gboolean waitall, gint32 ms, MonoError *error);
+
 static void
 mono_threads_lock (void)
 {
@@ -1518,6 +1521,7 @@ ves_icall_System_Threading_Thread_Join_internal(MonoThread *this_obj, int ms)
 	HANDLE handle = thread->handle;
 	MonoInternalThread *cur_thread = mono_thread_internal_current ();
 	gboolean ret;
+	MonoError error;
 
 	if (mono_thread_current_check_pending_interrupt ())
 		return FALSE;
@@ -1541,10 +1545,12 @@ ves_icall_System_Threading_Thread_Join_internal(MonoThread *this_obj, int ms)
 	mono_thread_set_state (cur_thread, ThreadState_WaitSleepJoin);
 
 	MONO_ENTER_GC_SAFE;
-	ret=WaitForSingleObjectEx (handle, ms, TRUE);
+	ret = mono_wait_uninterrupted(cur_thread, 1, &handle, FALSE, ms, &error);
 	MONO_EXIT_GC_SAFE;
 
 	mono_thread_clr_state (cur_thread, ThreadState_WaitSleepJoin);
+
+	mono_error_set_pending_exception(&error);
 	
 	if(ret==WAIT_OBJECT_0) {
 		THREAD_DEBUG (g_message ("%s: join successful", __func__));
@@ -5165,4 +5171,25 @@ mono_thread_try_resume_interruption (void)
 		return NULL;
 
 	return mono_thread_resume_interruption ();
+}
+
+MonoException* mono_unity_thread_check_exception()
+{
+	MonoInternalThread *thread = mono_thread_internal_current();
+	MonoThread *sys_thread = mono_thread_current();
+
+	lock_thread(thread);
+
+	if (sys_thread->pending_exception) {
+		MonoException *exc;
+
+		exc = sys_thread->pending_exception;
+		sys_thread->pending_exception = NULL;
+		
+		unlock_thread(thread);
+		return exc;
+	}
+
+	unlock_thread(thread);
+	return NULL;
 }

@@ -50,6 +50,7 @@ MonoStats mono_stats;
 
 gboolean mono_print_vtable = FALSE;
 gboolean mono_align_small_structs = FALSE;
+static gboolean mono_allow_gc_aware_layout = TRUE;
 
 /* Statistics */
 guint32 inflated_classes, inflated_classes_size, inflated_methods_size;
@@ -1614,12 +1615,26 @@ mono_class_setup_fields (MonoClass *klass)
 		}
 		instance_size += klass->parent->instance_size;
 		klass->min_align = klass->parent->min_align;
+
+#ifdef IL2CPP_ON_MONO
+		if (klass->valuetype)
+			klass->min_align = 1;
+		else
+			klass->min_align = klass->parent->min_align;
+#else
+			klass->min_align = klass->parent->min_align;
+#endif
+
 		/* we use |= since it may have been set already */
 		klass->has_references |= klass->parent->has_references;
 		blittable = klass->parent->blittable;
 	} else {
 		instance_size = sizeof (MonoObject);
+#ifdef IL2CPP_ON_MONO
+		klass->min_align = sizeof(void*);
+#else
 		klass->min_align = 1;
+#endif
 	}
 
 	/* We can't really enable 16 bytes alignment until the GC supports it.
@@ -1889,7 +1904,7 @@ mono_class_layout_fields (MonoClass *klass, int instance_size)
 	 * what the default is for other runtimes.
 	 */
 	 /* corlib is missing [StructLayout] directives in many places */
-	if (layout == TYPE_ATTRIBUTE_AUTO_LAYOUT) {
+	if (mono_allow_gc_aware_layout && (layout == TYPE_ATTRIBUTE_AUTO_LAYOUT)) {
 		if (!klass->valuetype)
 			gc_aware_layout = TRUE;
 	}
@@ -4275,12 +4290,18 @@ print_unimplemented_interface_method_info (MonoClass *klass, MonoClass *ic, Mono
 	}
 }
 
-static MonoMethod*
+MonoMethod*
 mono_method_get_method_definition (MonoMethod *method)
 {
 	while (method->is_inflated)
 		method = ((MonoMethodInflated*)method)->declaring;
 	return method;
+}
+
+void
+mono_class_set_allow_gc_aware_layout(mono_bool allow)
+{
+	mono_allow_gc_aware_layout = allow;
 }
 
 static gboolean

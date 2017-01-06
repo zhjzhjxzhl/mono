@@ -749,7 +749,9 @@ worker_try_create (void)
 	current_ticks = mono_100ns_ticks ();
 	now = current_ticks / (10 * 1000 * 1000);
 	if (0 == current_ticks) {
+#ifndef IL2CPP_ON_MONO
 		g_warning ("failed to get 100ns ticks");
+#endif
 	} else {
 		if (threadpool->worker_creation_current_second != now) {
 			threadpool->worker_creation_current_second = now;
