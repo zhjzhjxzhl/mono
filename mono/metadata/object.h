@@ -1,6 +1,7 @@
 #ifndef _MONO_CLI_OBJECT_H_
 #define _MONO_CLI_OBJECT_H_
 
+#include <assert.h>
 #include <mono/metadata/class.h>
 #include <mono/utils/mono-error.h>
 
@@ -36,7 +37,7 @@ typedef void*    (*MonoCompileFunc)	     (MonoMethod *method);
 typedef void	    (*MonoMainThreadFunc)    (void* user_data);
 
 #define MONO_OBJECT_SETREF(obj,fieldname,value) do {	\
-		g_assert (sizeof((obj)->fieldname) == sizeof (gpointer*));	\
+		assert (sizeof((obj)->fieldname) == sizeof (gpointer*));	\
 		mono_gc_wbarrier_set_field ((MonoObject*)(obj), &((obj)->fieldname), (MonoObject*)value);	\
 		/*(obj)->fieldname = (value);*/	\
 	} while (0)
